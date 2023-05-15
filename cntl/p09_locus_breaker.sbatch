@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH --job-name=blood_loci_lister
+#SBATCH --job-name=your_trait_loci_lister
 #SBATCH --partition=cpuq
 #SBATCH --cpus-per-task=2
 #SBATCH --output=logs/p09_locus_breaker_%a.log
 #SBATCH --mem-per-cpu=16G
 #SBATCH --time=01:00:00
-#SBATCH --array=5-29
+#SBATCH --array=1-29 ### depending on the number of you traits
 
 # Loading modules
 module load R/4.1.0
@@ -16,4 +16,9 @@ Rscript --vanilla /group/pirastu/prj_004_variant2function/scripts/locus_breaker_
 --pref "ukbb_topmed_" \
 --suf "_normalised.tsv.gz" \
 --out "/group/pirastu/prj_004_variant2function/gwas_topmed_rap"\
-
+--sig_pval 5e-08 \
+--limit 1e-05 \
+--hole 250000 \
+--chr CHROM \
+--pos GENPOS \
+--pvalue P
