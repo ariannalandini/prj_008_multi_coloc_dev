@@ -50,7 +50,7 @@ if(is.null(opt$path)){
 
 ## Create output folders
 if(is.null(opt$out)){ opt$out <- gsub("^(.*)/(.*)$", "\\1", opt$path) }
-system(paste0("mkdir -p ", opt$out, "/mh_and_loci"))
+system(paste0("mkdir -p ", opt$out, "/loci_definition"))
 
 ### Select one from the list of all available GWAS at the listed path (based on array job)
 gwas <- list.files(path=opt$path, pattern="*", full.names = T)[[num]]
@@ -71,7 +71,7 @@ trait.res <- locus.breaker(sum_stat,
 trait_name <- gsub(paste0(opt$path, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)
 trait.res <- trait.res %>% mutate(trait=trait_name, path=gwas)
 cat(paste0("\n", nrow(trait.res), " loci identified for ", trait_name, "\n"))
-fwrite(trait.res, paste0(opt$out, "/mh_and_loci/", trait_name, "_loci.tsv"),
+fwrite(trait.res, paste0(opt$out, "/loci_definition/", trait_name, "_loci.tsv"),
        sep="\t", quote=F, na=NA)
 
 cat("\n**** DONE!! ****\n")
