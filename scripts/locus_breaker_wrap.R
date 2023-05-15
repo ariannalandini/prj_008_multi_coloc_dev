@@ -24,7 +24,7 @@ option_list <- list(
   make_option("--limit", type="numeric", default=1e-05, 
               help="P-value threshold for loci borders", metavar="numeric"),  
   make_option("--hole", type="integer", default=250000,
-              help="Minum pair-base distance between SNPs in different loci", metavar="integer"),
+              help="Minimum pair-base distance between SNPs in different loci", metavar="integer"),
   make_option("--chr", type="character", default="CHROM",
               help="Name of chromosome column in GWAS summary statistics", metavar="integer"),
   make_option("--pos", type="character", default="GENPOS", 
