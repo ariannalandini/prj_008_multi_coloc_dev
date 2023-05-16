@@ -9,10 +9,10 @@ Performs:
 
 1) Identification of trait-specific loci
 2) Identification of pan loci, grouping multiple overlapping loci across traits
-3) Colocalisation with decomposition of association signal
-    3.1) Identification, for each trait at each locus, of indipendent association signals
-    3.2) Leave-one-out conditioning of indipendent SNPs to clear the association signals
-    3.3) Coloc between all possible pairs of indipendent SNP-trait
+3) Colocalisation with decomposition of association signal\n
+    3.1) Identification, for each trait at each locus, of indipendent association signals\n
+    3.2) Leave-one-out conditioning of indipendent SNPs to clear the association signals\n
+    3.3) Coloc between all possible pairs of indipendent SNP-trait\n
 
 
 ## Installation
