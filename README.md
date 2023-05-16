@@ -7,23 +7,54 @@
 ## Description
 Performs:
 
-1) Identification of trait-specific loci\
-2) Identification of pan loci, grouping multiple overlapping loci across traits\
+1) Identification of trait-specific loci
+2) Identification of pan loci, grouping multiple overlapping loci across traits
 3) Colocalisation with decomposition of association signal\
     3.1) Identification, for each trait at each locus, of indipendent association signals\
     3.2) Leave-one-out conditioning of indipendent SNPs to clear the association signals\
-    3.3) Coloc between all possible pairs of indipendent SNP-trait\
+    3.3) Coloc between all possible pairs of indipendent SNP-trait
 
 
 ## Installation
 - Should we create a specific environment with all R packages used/COJO ?
 
 
+## Quick start
+- Give minimum example (example data needed?)
+
+Specify input by providing argument to the `--path` option in the `p09_locus_breaker.sbatch`
+```
+Rscript --vanilla /group/pirastu/prj_004_variant2function/scripts/locus_breaker_wrap.R \
+--path "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/sum_stats"
+```
+Then run specifying the number of traits
+```
+sbatch cntl/p09_locus_breaker.sbatch --array=1-29
+```
+
+
+```
+sbatch cntl/p10_locus_lister.sbatch
+```
+```
+Rscript /group/pirastu/prj_004_variant2function/scripts/locus_lister_wrap.R \
+--loci_path "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci"
+```
+
+```
+sbatch cntl/p11_multi_coloc.sbatch
+```
+```
+Rscript --vanilla /group/pirastu/prj_004_variant2function/scripts/multi_coloc_wrap.R \
+--input "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
+```
+
+
 ## Usage
 
-1) Create trait-specific loci table\
+1) Create trait-specific loci table
 
-To identify the associated loci specific to each trait in a list, you should run the **`cntl/p09_locus_breaker.sbatch`** script, providing:\
+To identify the associated loci specific to each trait in a list, run the **`cntl/p09_locus_breaker.sbatch`** script, providing:\
     `--path`: path to directory where GWAS summary statistics for all your traits of interest are located.\
 Note this is the only essential option, if not provided the script will throw an error.\
     `--pref`: prefix to the trait name of provided GWAS summary statistics\
@@ -39,8 +70,11 @@ NB: Regenie (and thus the [GAU Regenie pipeline](https://gitlab.fht.org/genome-a
     `--limit`: P-value threshold for loci borders (default: 1e-05)\
     `--hole`: Minimum pair-base distance between SNPs in different loci (default: 250000)
 
+Finally, specifiy the number of traits (whose GWAS summary statistics are present at the input path) for which the script should be run in the `#SBATCH --array` option. Array job 
+
 
 2) Create pan-loci table
+To identify pan-loci, that is mega loci including overlapping trait-specific loci, run the **`cntl/p10_locus_lister.sbatch`** script, providing:\
 
 3) Run coloc
 
@@ -49,8 +83,12 @@ NB: Regenie (and thus the [GAU Regenie pipeline](https://gitlab.fht.org/genome-a
 - Patch `coloc.abf()` function to account for sample overlap
 - Include in `locus.breaker` function the possibility of providing LOG10 p-value
 - Slim down output files?
-- Include possibility to perform coloc on a specified custom region
+- What about COJO collinearity?
+- Include possibility to perform coloc on a specified custom region (skipping locus.breaker and locus.lister steps)
 - Include TileDB format as input
+- Include example data to test the pipeline?
+- Create a master .sbatch?
+
 
 
 ## Authors and acknowledgment
