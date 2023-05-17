@@ -1,7 +1,7 @@
 ### Multicoloc
 library(optparse)
 #library(corrplot)
-source("/group/pirastu/prj_004_variant2function/scripts/multi_coloc_funs.R")
+source("/group/pirastu/prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 option_list <- list(
   make_option("--input", type="character", default=NULL, 
@@ -34,7 +34,7 @@ opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
 
 ########### to delete
-#opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/loci_and_mh/ukbb_topmed_all_loci.tsv"
+#opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
 #opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
 ###########
 
@@ -253,19 +253,16 @@ if(locus %in% hla_locus){
     if(nrow(final.colocs)>0){
         final.colocs$locus=locus
         colocalization.table.all=rbind(colocalization.table.all,final.colocs)
+        write.table(colocalization.table.all,
+                    file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"),
+                    row.names=F,quote=F,sep="\t")
     }
     if(nrow(final.colocs.H4)>0){
         colocalization.table.H4=rbind(colocalization.table.H4,final.colocs.H4)
+        write.table(colocalization.table.H4,
+                    file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"),
+                    row.names=F,quote=F,sep="\t")
     }
-
-### Summary coloc tables
-    write.table(colocalization.table.all,
-      file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"),
-      row.names=F,quote=F,sep="\t")
-    
-    write.table(colocalization.table.H4,
-      file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"),
-      row.names=F,quote=F,sep="\t")
     
   }else{
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
