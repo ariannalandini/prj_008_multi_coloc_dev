@@ -11,8 +11,8 @@ num <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 
 ### Arguments
 option_list <- list(
-  make_option("--path", type="character", default=NULL, 
-              help="Path to directory having all munged GWAS summary statistics", metavar="character"),
+  make_option("--path", type="character", default=NULL,
+              help="Path to directory(ies) having all munged GWAS summary statistics", metavar="character"),
   make_option("--pref", type="character", default="", 
               help="Prefix to the trait in the file name (will be removed)", metavar="character"),  
   make_option("--suf", type="character", default=".regenie.gz", 
@@ -37,7 +37,7 @@ opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
 
 ########### to delete
-#opt$path="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/sum_stats"
+#opt$path="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/sum_stats,gwas_hrc_local/ukbb_astle_2016_blood_traits_normalised/results"
 #opt$pref="ukbb_topmed_"
 #opt$suf="_normalised.tsv.gz"
 ###########
@@ -48,16 +48,31 @@ if(is.null(opt$path)){
   stop("Please specify the path of your GWAS summary statistics in --path option", call.=FALSE)
 }
 
-## Create output folders
-if(is.null(opt$out)){ opt$out <- gsub("^(.*)/(.*)$", "\\1", opt$path) }
-system(paste0("mkdir -p ", opt$out, "/loci_definition"))
+### Split list of input paths (divided)
+opt$path_list <- unlist(strsplit(opt$path, ","))
 
-### Select one from the list of all available GWAS at the listed path (based on array job)
-gwas <- list.files(path=opt$path, pattern="*", full.names = T)[[num]]
+### Select one from the list of all available GWAS at the listed path (based on array job) - getting only files ending in ".gz" and ".tsv". List to expand??
+gwas <- c(
+  list.files(path=opt$path_list, pattern="*.gz$", full.names = T),
+  list.files(path=opt$path_list, pattern=".tsv$", full.names = T)
+)[[num]]
+
+## Create output folder (for the specific GWAS sum stat selected)
+if(is.null(opt$out)){ opt$out <- gsub("^(.*)/.*/.*$", "\\1", gwas) }
+system(paste0("mkdir -p ", opt$out, "/loci_definition"))
 
 ### Load-in munged sum stat
 sum_stat <- fread(gwas, data.table=F)
 
+### Check if p-value column provided is log10 transformed. If yes, compute original p-value
+if (all(sum_stat[[opt$pvalue]] >= 0 & sum_stat[[opt$pvalue]] <= 1)) {
+  opt$pvalue <- opt$pvalue
+} else {
+  sum_stat <- sum_stat %>%
+    mutate(P=10^(-sum_stat[[opt$pvalue]]))
+  opt$pvalue="P"
+}
+  
 ### Loci identification
 trait.res <- locus.breaker(sum_stat,
               p.sig=opt$sig_pval,
@@ -67,8 +82,11 @@ trait.res <- locus.breaker(sum_stat,
               chr.label=opt$chr,
               pos.label=opt$pos)
 
-### Bit of formatting and save
-trait_name <- gsub(paste0(opt$path, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)
+### Extract trait name. Discard option(s) where "/" is in the name
+trait_name <- sapply(opt$path_list, function(x){gsub(paste0(x, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)}, USE.NAMES=FALSE)
+trait_name <- trait_name[which(!grepl("/", trait_name))]
+
+### Add trait name and GWAS sum stat path to the loci table (needed later for coloc). Save
 trait.res <- trait.res %>% mutate(trait=trait_name, path=gwas)
 cat(paste0("\n", nrow(trait.res), " loci identified for ", trait_name, "\n"))
 fwrite(trait.res, paste0(opt$out, "/loci_definition/", trait_name, "_loci.tsv"),
