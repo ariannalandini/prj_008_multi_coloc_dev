@@ -40,6 +40,7 @@ opt = parse_args(opt_parser);
 #opt$path="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/sum_stats,gwas_hrc_local/ukbb_astle_2016_blood_traits_normalised/results"
 #opt$pref="ukbb_topmed_"
 #opt$suf="_normalised.tsv.gz"
+#opt$out="output_dir1"
 ###########
 
 ## Throw error message - munged GWAS summary statistics file file MUST be provided!
@@ -51,15 +52,17 @@ if(is.null(opt$path)){
 ### Split list of input paths (divided)
 opt$path_list <- unlist(strsplit(opt$path, ","))
 
+
 ### Select one from the list of all available GWAS at the listed path (based on array job) - getting only files ending in ".gz" and ".tsv". List to expand??
 gwas <- c(
   list.files(path=opt$path_list, pattern="*.gz$", full.names = T),
   list.files(path=opt$path_list, pattern=".tsv$", full.names = T)
 )[[num]]
 
-## Create output folder (for the specific GWAS sum stat selected)
-if(is.null(opt$out)){ opt$out <- gsub("^(.*)/.*/.*$", "\\1", gwas) }
-system(paste0("mkdir -p ", opt$out, "/loci_definition"))
+### Create output folder
+if(is.null(opt$out)){ opt$out <- paste0(gsub("^(.*)/.*/.*$", "\\1", gwas), "/loci_definition") } 
+system(paste0("mkdir -p ", opt$out))  
+
 
 ### Load-in munged sum stat
 sum_stat <- fread(gwas, data.table=F)
@@ -89,7 +92,6 @@ trait_name <- trait_name[which(!grepl("/", trait_name))]
 ### Add trait name and GWAS sum stat path to the loci table (needed later for coloc). Save
 trait.res <- trait.res %>% mutate(trait=trait_name, path=gwas)
 cat(paste0("\n", nrow(trait.res), " loci identified for ", trait_name, "\n"))
-fwrite(trait.res, paste0(opt$out, "/loci_definition/", trait_name, "_loci.tsv"),
-       sep="\t", quote=F, na=NA)
+fwrite(trait.res, paste0(opt$out, "/", trait_name, "_loci.tsv"), sep="\t", quote=F, na=NA)
 
 cat("\n**** DONE!! ****\n")
