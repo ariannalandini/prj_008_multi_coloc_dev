@@ -55,12 +55,12 @@ Rscript --vanilla /group/pirastu/prj_004_variant2function/scripts/multi_coloc_wr
 1) Create trait-specific loci table
 
 To identify the associated loci specific to each trait in a list, run the **`cntl/p09_locus_breaker.sbatch`** script, providing:\
-    `--path`: path to directory where GWAS summary statistics for all your traits of interest are located.\
-Note this is the only essential option, if not provided the script will throw an error.\
+    `--path`: path to directory or multiple (comma separated) directories where GWAS summary statistics for all your traits of interest are located.\
+Note this is the only essential option, if not provided the script will throw an error and stop.\
     `--pref`: prefix to the trait name of provided GWAS summary statistics\
     `--suf`: suffix to the trait name of provided GWAS summary statistics\
-Prefix and suffix are necessary to extract only the trait name (e.g. "height", "bmi", etc.) from your GWAS summary statistics file names. Of course, this assumes that all files present in the input folder have been named following the same logic.\
-    `--out`: path to directory where output loci tables will be stored\
+Prefix and suffix are necessary to extract only the trait name (e.g. "height", "bmi", etc.) from your GWAS summary statistics file names. Of course, this assumes that all files have been named following the same logic.\
+    `--out`: path to the (single) directory where output loci tables will be stored. \
     `--chr`: Name of chromosome column in GWAS summary statistics (default: CHROM)\
     `--pos`: Name of genetic position column in GWAS summary statistics (default: GENPOS)\
 While all the listed options are quite relevant, they are not strictly essential: for example, if your GWAS summary statistics have been created using the [GAU Regenie pipeline](https://gitlab.fht.org/genome-analysis-unit/nf-pipeline-regenie) and you are happy with having a `"loci_identification"` directory created in the parent directory of your input folder, then you are fine with defaul arguments.\
