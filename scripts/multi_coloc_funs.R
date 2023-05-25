@@ -168,7 +168,22 @@ cojo.ht=function(D=datasets[[1]]
       
       write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
       print(ind.snp$SNP[-i])
-      system(paste0(gcta.bin," --bfile ",random.number,"  --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt  --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+
+      
+#### KEEP WORKING FROM HERE ###### try catch COJO errors - commented out for not breaking the code until this piece in finished
+      
+#      test_res <- tryCatch(
+#        system(paste0(gcta.bin," --bfile ",random.number,"  --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt  --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"), intern=TRUE),
+#        warning = function(war) {
+          # Handle the warning here
+          # You can print an error message or perform any other desired action
+#          print(paste("Hey hey! Error:", conditionMessage(war)))
+          # Return a default value or NULL to indicate failure
+#          NULL
+#        }
+#      )
+      
+############
       
       step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
       dataset.list$results[[i]]=step2.res
@@ -276,7 +291,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
   
   if(length(hits.t2)>0 & length(hits.t1)>0){
     
-    coloc.results=c()
+    coloc.final=list()
     for(i in hits.t1){
       for(j in hits.t2){
         
@@ -293,11 +308,12 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
           D1=D1[,c("SNP","Chr","bp","b","se","n","p","freq")]
           names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
         }
+        
         D1$type="quant"
         D1$varbeta=D1$varbeta^2
+        D1=na.omit(D1)
         
         if(length(grep("bC",names(D2)))>0){
-          
           D2=D2[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq")]
           names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
         }else{
@@ -308,19 +324,27 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         
         D2$type="quant"
         D2$varbeta=D2$varbeta^2
-        D1=na.omit(D1)
         D2=na.omit(D2)
+        
         colo.res=coloc.abf(D1,D2)
-        colo.res=data.frame(t(colo.res$summary))
-        colo.res$hit1=i
-        colo.res$hit2=j
-        coloc.results=rbind(coloc.results,colo.res)
+
+## Save coloc summary        
+        colo.sum=data.frame(t(colo.res$summary))
+        colo.sum$hit1=i
+        colo.sum$hit2=j
+#        coloc.summary=rbind(coloc.summary,colo.sum)
+
+## Save coloc result by SNP
+        colo.full_res=colo.res$results %>% select(snp,SNP.PP.H4) %>% mutate(hit1=i, hit2=j)
+        colo.all <- list(summary=colo.sum, results=colo.full_res)
+## Organise all in a list of lists (each list is composed of summary + results)
+        coloc.final <- c(coloc.final, list(colo.all))
       }
     }
   }else{
-    coloc.results=NULL
+    coloc.final=NULL
   }
-  coloc.results
+  return(coloc.final)
 }
 
 
@@ -600,14 +624,3 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
   }
   top.snp
 }
-
-
-
-
-
-
-
-
-
-
-
