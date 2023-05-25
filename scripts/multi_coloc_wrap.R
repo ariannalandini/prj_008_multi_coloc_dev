@@ -84,7 +84,7 @@ if(locus %in% hla_locus){
   
   #proportions=readRDS("/project/aid_sharing/AID_sharing/outputs/gwas_uc-cd-psc-ra-sle-t1d-jia-asthma-derma/04_sumstat_outputs/case_controls_fraction_nic.RDS")
   
-  t.type=rep("quant", length(labels))
+  t.type=rep("quant", length(labels)) ### TO CHANGE - Needs to be customizable!
   prev.var=rep(1, length(labels))
   
   file.table <- data.frame(file=file.list, trait=labels, type=t.type, prev.var=prev.var)
@@ -153,7 +153,7 @@ if(locus %in% hla_locus){
 ##############################################################
   
   
-# Plot of all indipendent associations for each trait
+# Plot of all independent associations for each trait
   pdf(paste0(opt$output, "/plots/locus_", locus, "_conditioned_loci.pdf"), height=3.5*max.loci, width=10)
   for(i in 1:length(conditional.datasets)){
     p4 <- plot.cojo.ht(conditional.datasets[[i]]) +
@@ -163,38 +163,55 @@ if(locus %in% hla_locus){
   dev.off()
 
 
-
-# Only if there are multiple traits
+# Only if there are multiple traits at the same locus
   if(length(conditional.datasets)>1){
     
-# Identify all pairwise combination of tested traits 
+# Identify all pairwise combination of traits to test
     pairwise.list=t(combn(names(conditional.datasets),2))
 # Prepare final locus.table for coloc
     final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp)
 
-    
+
 ### Run colocalisation and store results
-    final.colocs=c()
+    final.colocs.summary=c()
+    final.colocs.results=c()
+
+# Loop over each pair-wise combination of traits (stored in pairwise.list)   
     for(i in 1:nrow(pairwise.list)){
+# Perform colocalisation for each combination of independent SNPs
       coloc.res=colo.cojo.ht(
         conditional.dataset1=conditional.datasets[[pairwise.list[i,1]]],
         conditional.dataset2 = conditional.datasets[[pairwise.list[i,2]]],
         p.threshold.cond = 1e-6,
-        p.threshold.orig = 5e-8 
-      )
-        
+        p.threshold.orig = 5e-8)
+# Check coloc was performed (necessary?)         
       if(!is.null(coloc.res)){
-          coloc.res$t1=pairwise.list[i,1]
-          coloc.res$t2=pairwise.list[i,2]
-          final.colocs=rbind(final.colocs,coloc.res)
-        }
+# Store the summary output in a data frame, adding tested traits column         
+        only_summary_df <- as.data.frame(rbindlist(lapply(coloc.res, function(x) {
+          x$summary <- x$summary %>% 
+            mutate(t1=pairwise.list[i,1], t2=pairwise.list[i,2])
+        })))
+# Store the results output in a list, adding tested traits column     
+        only_results_list <- lapply(coloc.res, function(x) {
+          x$results <- x$results %>% 
+            mutate(t1=pairwise.list[i,1], t2=pairwise.list[i,2])
+        })
+# Append loop result
+          final.colocs.summary=rbind(final.colocs.summary,only_summary_df)
+          final.colocs.results=c(final.colocs.results,only_results_list)
+      }
     }
 
-    
-# Identify traits colocalising (PP.H4 >= 0.9)
-    final.colocs.H4=final.colocs[round(final.colocs$PP.H4.abf,digits = 2)>=0.90,]
-    final.colocs.H4=as.data.frame(final.colocs.H4)
+# Get the index of columns where PP.H4 >= 0.9
+    index <- which(round(final.colocs.summary$PP.H4.abf,2) >= 0.90)
 
+# Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
+    final.colocs.H4 <- final.colocs.summary[index,]
+    by_snp_PPH4 <- final.colocs.results[index]
+    
+    
+########## START FROM HERE TOMORROW    
+    
     colocalization.table.all=c()
     colocalization.table.H4=c()
 #   k=1 (needed?)
@@ -210,6 +227,20 @@ if(locus %in% hla_locus){
       
       final.locus.table.tmp <- coloc.subgrouping(final.colocs.H4, final.locus.table.tmp)
 
+      
+################################################################      
+### BUT AT THIS STEP OR LATER?!     
+### Add filter for relevant SNPs inside colocalising group
+      if(any(final.locus.table.tmp$p < 5e-8 & final.locus.table.tmp$pJ < 1e-6 |
+          final.locus.table.tmp$pJ < 5e-8)){
+        final.locus.table.tmp <- final.locus.table.tmp %>%
+          mutate(flag=ifelse(p < 5e-8 & pJ < 1e-4, "keep", "remove"))
+      } else {
+        final.locus.table.tmp <- final.locus.table.tmp %>%
+          mutate(flag=ifelse(p < 5e-8 & pJ < 1e-6 | pJ < 5e-8, "keep", "remove"))
+      }
+#################################################################
+      
       
 ### Create pleiotropy table
       pleio.all=c()
@@ -259,6 +290,19 @@ if(locus %in% hla_locus){
     }
     if(nrow(final.colocs.H4)>0){
         colocalization.table.H4=rbind(colocalization.table.H4,final.colocs.H4)
+        
+        
+#### Merge with flagged final.locus.table.tmp to remove "to remove" SNP/traits       
+        colocalization.table.H4 <- inner_join(colocalization.table.H4,
+                   final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag1),
+                   by=c("t1"="trait", "hit1"="SNP", "g1"="sub_locus"),
+                   multiple = "all") %>%
+          inner_join(final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag2),
+                     by=c("t2"="trait", "hit2"="SNP", "g1"="sub_locus"),
+                     multiple = "all") %>%
+          filter(flag1=="keep" & flag2=="keep") %>%
+          select(-flag1, -flag2)
+
         write.table(colocalization.table.H4,
                     file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"),
                     row.names=F,quote=F,sep="\t")
