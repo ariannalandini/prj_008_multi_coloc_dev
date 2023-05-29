@@ -81,11 +81,11 @@ To identify pan-loci, that is mega loci including overlapping trait-specific loc
 
 ## To do
 - Patch `coloc.abf()` function to account for sample overlap
-- Include in `locus.breaker` function the possibility of providing LOG10 p-value
-- Slim down output files?
-- What about COJO collinearity?
+- ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
+- Slim down output files? --> Implement new p-value filter discussed at last meeting
+- What about COJO collinearity? --> Use tryCatch()
 - Include possibility to perform coloc on a specified custom region (skipping locus.breaker and locus.lister steps)
-- Include TileDB format as input
+- Include TileDB format as input --> check https://dirk.eddelbuettel.com/papers/useR2021_tiledb_tutorial.pdf
 - Include example data to test the pipeline?
 - Create a master .sbatch?
 
