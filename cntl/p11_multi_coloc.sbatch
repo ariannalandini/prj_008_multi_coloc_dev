@@ -11,7 +11,7 @@
 module load R/4.1.0
 
 ### The --vanilla option tells Rscript to run without saving or restoring anything in the process. This keeps things nice and clean
-Rscript --vanilla /group/pirastu/prj_004_variant2function/scripts/multi_coloc_wrap.R \
+Rscript --vanilla /group/pirastu/prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --input "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv" \
 --output "coloc/multi_coloc" \
 --chr "CHROM" \
