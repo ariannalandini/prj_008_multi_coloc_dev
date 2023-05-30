@@ -168,7 +168,8 @@ cojo.ht=function(D=datasets[[1]]
       
       write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
       print(ind.snp$SNP[-i])
-
+      
+      system(paste0(gcta.bin," --bfile ",random.number,"  --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt  --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
       
 #### KEEP WORKING FROM HERE ###### try catch COJO errors - commented out for not breaking the code until this piece in finished
       
