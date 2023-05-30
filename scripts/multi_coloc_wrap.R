@@ -275,8 +275,8 @@ if(locus %in% hla_locus){
 
 ### Save ALL colocalisation summary output    
     if(nrow(final.colocs.summary)>0){
-      final.colocs.summary$pan.locus=locus
-      colocalization.table.all=rbind(colocalization.table.all,final.colocs.summary)
+#      final.colocs.summary$pan.locus=locus
+      colocalization.table.all=rbind(colocalization.table.all,final.colocs.summary) ### Necessary??
       write.table(colocalization.table.all,
         file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"),
         row.names=F,quote=F,sep="\t")
@@ -298,10 +298,11 @@ if(locus %in% hla_locus){
       ) 
       
 # Get the index of rows where at least one "remove" flag is present
-      index2 <- which(rowSums(sapply(colocalization.table.H4[, c("flag.x", "flag.y")], grepl, pattern = "keep")) == 2)
-  
+      index2 <- which(apply(colocalization.table.H4, 1, function(x) sum(x == "keep"))==2)
+
 # Remove all SNPs flagged and save from coloc summary output     
-      colocalization.table.H4 %>% filter(flag.x=="keep" & flag.y=="keep") %>%
+      colocalization.table.H4 <- colocalization.table.H4 %>%
+        filter(flag.x=="keep" & flag.y=="keep") %>%
         select(-flag.x, -flag.y)
         
       write.table(colocalization.table.H4,
