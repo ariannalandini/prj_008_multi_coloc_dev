@@ -1,5 +1,5 @@
 ### Multicoloc
-library(optparse)
+suppressMessages(library(optparse))
 source("/group/pirastu/prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 option_list <- list(
@@ -201,7 +201,7 @@ if(locus %in% hla_locus){
     }
 
 # Get the index of columns where PP.H4 >= 0.9
-    index <- which(round(final.colocs.summary$PP.H4.abf,2) >= 0.90)
+    index <- which(round(as.numeric(final.colocs.summary$PP.H4.abf),2) >= 0.90)
 
 # Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
     final.colocs.H4 <- final.colocs.summary[index,]
@@ -340,11 +340,9 @@ if(locus %in% hla_locus){
             
         merged_df <- merged_df %>%
       # log transform SNP.PP.H4
-          mutate(across(all_of(matches("SNP.PP.H4")), log)
-      # ,pan.locus=locus) 
-          )%>%
+          mutate(across(all_of(matches("SNP.PP.H4")), log), pan.locus=locus)%>%
           mutate(PP.H4.sum=rowSums(select(., all_of(columns_to_sum)))) %>%
-          select(snp, PP.H4.sum, g1) %>%
+          select(snp, PP.H4.sum, pan.locus, g1) %>%
           arrange(desc(PP.H4.sum)) %>%
           filter(PP.H4.sum==max(PP.H4.sum, na.rm=T))
           fine.mapping.table <- rbind(fine.mapping.table, merged_df)
