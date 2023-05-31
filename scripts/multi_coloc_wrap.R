@@ -370,7 +370,8 @@ if(locus %in% hla_locus){
     final.locus.table.tmp=final.locus.table.tmp[,col.order]
   }
   
-  final.locus.table=rbind(final.locus.table,final.locus.table.tmp) %>% select(-flag)
+  final.locus.table=rbind(final.locus.table,final.locus.table.tmp)
+  if("flag" %in% colnames(final.locus.table)){ final.locus.table <- final.locus.table %>% select(-flag) }
   print(final.locus.table)
   
   write.table(final.locus.table, file=paste0(opt$output, "/results/locus_", locus, "_final_locus_table.tsv"),
