@@ -345,7 +345,7 @@ if(locus %in% hla_locus){
           select(snp, PP.H4.sum, pan.locus, g1) %>%
           arrange(desc(PP.H4.sum)) %>%
           filter(PP.H4.sum==max(PP.H4.sum, na.rm=T))
-          fine.mapping.table <- rbind(fine.mapping.table, merged_df)
+          fine.mapping.table <- rbind(fine.mapping.table, merged_df) %>% select(-flag)
       }
       fwrite(fine.mapping.table,
         paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
@@ -370,7 +370,7 @@ if(locus %in% hla_locus){
     final.locus.table.tmp=final.locus.table.tmp[,col.order]
   }
   
-  final.locus.table=rbind(final.locus.table,final.locus.table.tmp) %>% select(-flag)
+  final.locus.table=rbind(final.locus.table,final.locus.table.tmp)
   print(final.locus.table)
   
   write.table(final.locus.table, file=paste0(opt$output, "/results/locus_", locus, "_final_locus_table.tsv"),
