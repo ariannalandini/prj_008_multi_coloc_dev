@@ -324,39 +324,56 @@ if(locus %in% hla_locus){
           mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
           select(-t1,-t2)
       })
+
+
+           
+#### START FROM HERE WHEN BACK #######      
+
+        
+# Merge in single data frame and then re-split by group            
+      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
       
 # Add sub locus as list names
       names(by_snp_PPH4_final) <- sapply(by_snp_PPH4_final,
                                          function(x){paste0("g1_", unique(x$g1))})     
 
-#### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
-      fine.mapping.table <- c()         
+###################################################################################### COMMENT THIS ALL OUT IN CASE SOMEONE WANTS TO USE THE SCRIPT WHILE I'M ON HOLIDAY
       
-      for (g1 in unique(names(by_snp_PPH4_final))){
+#### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
+#      fine.mapping.table <- c()         
+      
+#      for (g1 in unique(names(by_snp_PPH4_final))){
 # Find matching names in the list
-        matching_indices <- grep(g1, names(by_snp_PPH4_final))
+#        matching_indices <- grep(paste0("^",g1,"$"), names(by_snp_PPH4_final))
         
 # Extract the objects with matching names
-        extracted_objects <- by_snp_PPH4_final[matching_indices]
+#        extracted_objects <- by_snp_PPH4_final[matching_indices]
 
+        
+### PROBLEM: for same sub group and trait, sam SNP duplicated (probably different hit1/hit2?)
+### lABF (same SNP and trait) NOT ALWAYS the same! Check mch and mcv for g1_1 - WHY?!        
+        
 # Merge by SNP dataframes from the same sub locus
-        merged_df <- Reduce(function(x, y) merge(x, y,
-          by=c("snp","g1","pan.locus","trait","lABF"), all = TRUE), extracted_objects) %>% 
-          group_by(snp) %>%
-          mutate(lABF_sum=sum(lABF)) %>%
-          ungroup(snp) %>%
-          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
-          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
+#        merged_df <- Reduce(function(x, y) merge(x, y,
+#          by=c("snp","g1","pan.locus","trait","lABF"), all = TRUE), extracted_objects) %>% 
+#          group_by(snp) %>%
+###          distinct(snp, trait) %>%
+#          mutate(lABF_sum=sum(lABF)) %>%
+#          ungroup(snp) %>%
+#          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
+#          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
 # Alternative: pick all SNPs with min value rounded by 3        
 #        min_value <- min(unique(round(merged_df$lABF_sum_scaled,3)),na.rm=T)
 #        merged_df <- merged_df %>% filter(round(lABF_sum_scaled,3)==min_value)
-        fine.mapping.table <- rbind(fine.mapping.table, as.data.frame(merged_df))
-      }
+#        fine.mapping.table <- rbind(fine.mapping.table, as.data.frame(merged_df))
+#      }
       
-      fwrite(fine.mapping.table,
-        paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
-        sep="\t", quote=F, na=NA)
-    
+#      fwrite(fine.mapping.table,
+#        paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
+#        sep="\t", quote=F, na=NA)
+
+########################################################################################      
+          
   }else{
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
     final.locus.table.tmp$start=locus.info$start
