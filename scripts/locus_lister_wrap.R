@@ -47,7 +47,7 @@ option_list <- list(
               help="Name of effect size column", metavar="character"),  
   make_option("--se", type="character", default="SE", 
               help="Name of standard error of effect column", metavar="character"), 
-  make_option("--pval", type="character", default="LOG10P", 
+  make_option("--pval", type="character", default="P", 
               help="Name of p-value of effect column", metavar="character"),
   make_option("--out", type="character", default="./panlocus_table.tsv", 
               help="Path and name of output directory and file", metavar="character")
