@@ -29,7 +29,7 @@ option_list <- list(
               help="Name of chromosome column in GWAS summary statistics", metavar="integer"),
   make_option("--pos", type="character", default="GENPOS", 
               help="Name of genetic position column in GWAS summary statistics", metavar="character"),  
-  make_option("--pvalue", type="character", default="P", 
+  make_option("--pvalue", type="character", default="LOG10P", 
               help="Name of p-value of effect column in GWAS summary statistics", metavar="character")
 );
 
