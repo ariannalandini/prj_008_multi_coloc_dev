@@ -335,7 +335,9 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
 #        coloc.summary=rbind(coloc.summary,colo.sum)
 
 ## Save coloc result by SNP
-        colo.full_res=colo.res$results %>% select(snp,SNP.PP.H4) %>% mutate(hit1=i, hit2=j)
+        colo.full_res=colo.res$results %>% 
+          select(snp,position,lABF.df1,lABF.df2,SNP.PP.H4) %>% 
+          mutate(hit1=i, hit2=j)
         colo.all <- list(summary=colo.sum, results=colo.full_res)
 ## Organise all in a list of lists (each list is composed of summary + results)
         coloc.final <- c(coloc.final, list(colo.all))
