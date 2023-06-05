@@ -1,5 +1,6 @@
 ### Multicoloc
 suppressMessages(library(optparse))
+suppressMessages(library(tidyr))
 source("/group/pirastu/prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 option_list <- list(
@@ -311,42 +312,47 @@ if(locus %in% hla_locus){
     
 # Result output of coloc
       by_snp_PPH4_final <- by_snp_PPH4[index2]
-      
-# Add sub locus info in result output of coloc    
+
+### Formatting of coloc results output for merge of same SNP across multiple traits         
       by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
-        x %>% left_join(colocalization.table.H4 %>% select(hit1,hit2,t1,t2,g1),
-        by=c("hit1", "hit2", "t1", "t2"))
+        x %>%
+# Add sub locus info in result output of coloc    
+          left_join(colocalization.table.H4 %>% select(t1,t2,g1), by=c("t1","t2")) %>% 
+          select(snp, matches("lABF"), t1,t2,g1,pan.locus) %>%
+# Move lABF values in a single column (SNPs duplicated by trait)          
+          gather("trait", "lABF", -snp,-t1,-t2,-g1,-pan.locus) %>%
+          mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
+          select(-t1,-t2)
       })
+      
 # Add sub locus as list names
       names(by_snp_PPH4_final) <- sapply(by_snp_PPH4_final,
-        function(x){paste0("g1_", unique(x$g1))})
-
+                                         function(x){paste0("g1_", unique(x$g1))})     
 
 #### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
       fine.mapping.table <- c()         
+      
       for (g1 in unique(names(by_snp_PPH4_final))){
-      # Find matching names in the list
+# Find matching names in the list
         matching_indices <- grep(g1, names(by_snp_PPH4_final))
-            
-      # Extract the objects with matching names
+        
+# Extract the objects with matching names
         extracted_objects <- by_snp_PPH4_final[matching_indices]
-            
-      # Merge by SNP dataframe from the same sub locus
-        merged_df <- Reduce(function(x, y) full_join(x, y, by = c("snp", "g1")),
-          extracted_objects) 
-            
-      # For each sub locus, sum up SNP.PP.H4
-        columns_to_sum <- names(merged_df)[grepl("SNP.PP.H4", names(merged_df))]
-            
-        merged_df <- merged_df %>%
-      # log transform SNP.PP.H4
-          mutate(across(all_of(matches("SNP.PP.H4")), log), pan.locus=locus)%>%
-          mutate(PP.H4.sum=rowSums(select(., all_of(columns_to_sum)))) %>%
-          select(snp, PP.H4.sum, pan.locus, g1) %>%
-          arrange(desc(PP.H4.sum)) %>%
-          filter(PP.H4.sum==max(PP.H4.sum, na.rm=T))
-          fine.mapping.table <- rbind(fine.mapping.table, merged_df) %>% select(-flag)
+
+# Merge by SNP dataframes from the same sub locus
+        merged_df <- Reduce(function(x, y) merge(x, y,
+          by=c("snp","g1","pan.locus","trait","lABF"), all = TRUE), extracted_objects) %>% 
+          group_by(snp) %>%
+          mutate(lABF_sum=sum(lABF)) %>%
+          ungroup(snp) %>%
+          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
+          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
+# Alternative: pick all SNPs with min value rounded by 3        
+#        min_value <- min(unique(round(merged_df$lABF_sum_scaled,3)),na.rm=T)
+#        merged_df <- merged_df %>% filter(round(lABF_sum_scaled,3)==min_value)
+        fine.mapping.table <- rbind(fine.mapping.table, as.data.frame(merged_df))
       }
+      
       fwrite(fine.mapping.table,
         paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
         sep="\t", quote=F, na=NA)
@@ -370,8 +376,7 @@ if(locus %in% hla_locus){
     final.locus.table.tmp=final.locus.table.tmp[,col.order]
   }
   
-  final.locus.table=rbind(final.locus.table,final.locus.table.tmp)
-  if("flag" %in% colnames(final.locus.table)){ final.locus.table <- final.locus.table %>% select(-flag) }
+  final.locus.table=as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) %>% select(-flag)
   print(final.locus.table)
   
   write.table(final.locus.table, file=paste0(opt$output, "/results/locus_", locus, "_final_locus_table.tsv"),
