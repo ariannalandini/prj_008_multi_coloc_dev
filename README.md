@@ -17,6 +17,7 @@ Performs:
 
 
 ## Installation
+Clone this repository
 - Should we create a specific environment with all R packages used/COJO ?
 
 
@@ -69,8 +70,8 @@ Prefix and suffix are necessary to extract only the trait name (e.g. "height", "
     `--chr`: Name of chromosome column in GWAS summary statistics (default: CHROM)\
     `--pos`: Name of genetic position column in GWAS summary statistics (default: GENPOS)\
 While all the listed options are quite relevant, they are not strictly essential: for example, if your GWAS summary statistics have been created using the [GAU Regenie pipeline](https://gitlab.fht.org/genome-analysis-unit/nf-pipeline-regenie) and you are happy with having a `"loci_identification"` directory created in the parent directory of your input folder, then you are fine with defaul arguments.\
-    `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: P)\
-NB: Regenie (and thus the [GAU Regenie pipeline](https://gitlab.fht.org/genome-analysis-unit/nf-pipeline-regenie)) will output only the LOG10 p-value
+    `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: LOG10P)\
+This can either be the raw p-value or the log10 transformed one.\ 
     `--sig_pval`: Significant p-value threshold for top hits (default:5e-08)\
     `--limit`: P-value threshold for loci borders (default: 1e-05)\
     `--hole`: Minimum pair-base distance between SNPs in different loci (default: 250000)
@@ -80,8 +81,24 @@ Finally, specifiy the number of traits (whose GWAS summary statistics are presen
 
 2) Create pan-loci table
 To identify pan-loci, that is mega loci including overlapping trait-specific loci, run the **`cntl/p10_locus_lister.sbatch`** script, providing:\
+    `--loci_path`: path to directory where all trait-specific loci table created by the previous step are stored.\
+Note this is the only essential option, if not provided the script will throw an error and stop.\
+    `--snp`: Name of rsid column in loci tables (default: ID) \
+    `--chr`: Name of chromosome column in loci tables (default: CHROM)\
+    `--pos`: Name of genetic position column in loci tables (default: GENPOS)\
+    `--a1`: Name of effect allele column in loci tables (default: ALLELE1) 
+    `--a0`: Name of NON effect allele column in loci tables (default: ALLELE0)\ 
+    `--effect`: Name of effect size column in loci tables (default: BETA)\ 
+    `--se`: Name of standard error of effect column in loci tables (default: SE)\
+    `--pval`: Name of p-value of effect column in loci tables (default: P)\
+    `--out`: Path to and name of the pan loci file.\
+
 
 3) Run coloc
+To run double-step conditioning on secondary association signals and pair-wise traits colocalisation, run the **`cntl/p11_multi_coloc.sbatch`** script, providing:\
+    `--input`: path and name of the pan loci table previously created.\
+Note this is the only essential option, if not provided the script will throw an error and stop.\
+
 
 
 ## To do
