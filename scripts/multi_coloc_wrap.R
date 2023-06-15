@@ -338,8 +338,10 @@ if(locus %in% hla_locus){
           group_by(snp) %>%
           mutate(lABF_sum=sum(lABF)) %>%
           ungroup(snp) %>%
-          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
+          mutate(lABF_sum_scaled=exp(lABF_sum)/sum(exp(lABF_sum))) %>% ### Fix scaling
           filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
+
+        
 # Alternative: pick all SNPs with min value rounded by 3        
 #        min_value <- min(unique(round(merged_df$lABF_sum_scaled,3)),na.rm=T)
 #        merged_df <- merged_df %>% filter(round(lABF_sum_scaled,3)==min_value)
