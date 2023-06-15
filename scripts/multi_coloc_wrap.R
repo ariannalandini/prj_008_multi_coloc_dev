@@ -35,7 +35,7 @@ opt = parse_args(opt_parser);
 
 ########### to delete
 #opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
-#opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
+#opt$output="/group/pirastu/prj_004_variant2function/coloc/test"
 ###########
 
 ## Throw error message - munged GWAS summary statistics file MUST be provided!
@@ -61,6 +61,7 @@ loci.table <- fread(opt$input) %>%
 
 ## Locus defined by array job
 locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+#locus=604
 
 ## Identify loci falling in HLA region
 ## Coordinates taken from this paper https://www.sciencedirect.com/science/article/pii/S1357272520301990
@@ -212,7 +213,7 @@ if(locus %in% hla_locus){
 ### Define colocalisation groups
     colocalization.table.all=c()
     colocalization.table.H4=c()
-#   k=1 (needed?)
+#   k=1 (needed? Left from Nicola's code)
         
 # If at least a couple of traits successfully colocalised 
     if(nrow(final.colocs.H4)>0){
@@ -227,12 +228,12 @@ if(locus %in% hla_locus){
       final.locus.table.tmp <- coloc.subgrouping(final.colocs.H4, final.locus.table.tmp)
 
 ### Flag SNPs not passing p-value filtering condition applied to colocalisation groups
-      final.locus.table.tmp <- final.locus.table.tmp %>%
+######## Filtering criteria to double-check with Nicola - SNPs with extremely significant pJ (but not p) are removed   
+      final.locus.table.tmp <- as.data.frame(final.locus.table.tmp %>%
         group_by(sub_locus) %>%
-        mutate(flag=
-          ifelse(any(p<5e-8 & pJ<1e-6 | pJ<5e-8),
-                 ifelse(p<5e-8 & pJ<1e-4, "keep", "remove"), "remove")
-        )
+        mutate(flag=ifelse(any(p<5e-8 & pJ<1e-6 | pJ<5e-8), "keep", "remove")) %>%
+        mutate(flag=ifelse(p<5e-8 & pJ<1e-4, flag, "remove"))
+      )
 
 ### Create pleiotropy table
       pleio.all=c()
@@ -317,7 +318,8 @@ if(locus %in% hla_locus){
       by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
         x %>%
 # Add sub locus info in result output of coloc    
-          left_join(colocalization.table.H4 %>% select(t1,t2,g1), by=c("t1","t2")) %>% 
+          left_join(colocalization.table.H4 %>% select(t1,hit1,t2,hit2,g1),
+            by=c("t1","hit1","hit2","t2")) %>% 
           select(snp, matches("lABF"), t1,t2,g1,pan.locus) %>%
 # Move lABF values in a single column (SNPs duplicated by trait)          
           gather("trait", "lABF", -snp,-t1,-t2,-g1,-pan.locus) %>%
@@ -325,55 +327,31 @@ if(locus %in% hla_locus){
           select(-t1,-t2)
       })
 
-
-           
-#### START FROM HERE WHEN BACK #######      
-
-        
-# Merge in single data frame and then re-split by group            
+# Merge in single data frame and then re-split by sub locus            
       by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
-      
-# Add sub locus as list names
-      names(by_snp_PPH4_final) <- sapply(by_snp_PPH4_final,
-                                         function(x){paste0("g1_", unique(x$g1))})     
 
-###################################################################################### COMMENT THIS ALL OUT IN CASE SOMEONE WANTS TO USE THE SCRIPT WHILE I'M ON HOLIDAY
-      
 #### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
-#      fine.mapping.table <- c()         
-      
-#      for (g1 in unique(names(by_snp_PPH4_final))){
-# Find matching names in the list
-#        matching_indices <- grep(paste0("^",g1,"$"), names(by_snp_PPH4_final))
-        
-# Extract the objects with matching names
-#        extracted_objects <- by_snp_PPH4_final[matching_indices]
-
-        
-### PROBLEM: for same sub group and trait, sam SNP duplicated (probably different hit1/hit2?)
-### lABF (same SNP and trait) NOT ALWAYS the same! Check mch and mcv for g1_1 - WHY?!        
-        
+      fine.mapping.table <- as.data.frame(rbindlist(lapply(by_snp_PPH4_final, function(x){
+        merged_df <- x %>% 
 # Merge by SNP dataframes from the same sub locus
-#        merged_df <- Reduce(function(x, y) merge(x, y,
-#          by=c("snp","g1","pan.locus","trait","lABF"), all = TRUE), extracted_objects) %>% 
-#          group_by(snp) %>%
-###          distinct(snp, trait) %>%
-#          mutate(lABF_sum=sum(lABF)) %>%
-#          ungroup(snp) %>%
-#          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
-#          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
+          distinct(trait, snp, lABF, .keep_all = T) %>% ## also lABF, just to check that it stays the same for the same SNP-trait pairs
+          group_by(snp) %>%
+          mutate(lABF_sum=sum(lABF)) %>%
+          ungroup(snp) %>%
+          mutate(lABF_sum_scaled=lABF_sum/sum(lABF)) %>%
+          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
 # Alternative: pick all SNPs with min value rounded by 3        
 #        min_value <- min(unique(round(merged_df$lABF_sum_scaled,3)),na.rm=T)
 #        merged_df <- merged_df %>% filter(round(lABF_sum_scaled,3)==min_value)
-#        fine.mapping.table <- rbind(fine.mapping.table, as.data.frame(merged_df))
-#      }
+        merged_df
+      })))
       
-#      fwrite(fine.mapping.table,
-#        paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
-#        sep="\t", quote=F, na=NA)
+      fwrite(fine.mapping.table,
+        paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
+        sep="\t", quote=F, na=NA)
 
-########################################################################################      
-          
+
+      
   }else{
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
     final.locus.table.tmp$start=locus.info$start
