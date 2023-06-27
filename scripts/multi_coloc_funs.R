@@ -187,6 +187,7 @@ cojo.ht=function(D=datasets[[1]]
       
       step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
       dataset.list$results[[i]]=step2.res
+      dataset.list$results[[i]]$sdY=1 ### add estimate of phenotypic variance
       names(dataset.list$results)[i]=ind.snp$SNP[i]
       
     }
@@ -197,6 +198,7 @@ cojo.ht=function(D=datasets[[1]]
     step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
     step2.res=step2.res[,c("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno")]
     dataset.list$results[[1]]=step2.res
+    dataset.list$results[[1]]$sdY=1
     names(dataset.list$results)[1]=ind.snp$SNP[1]
   }
   system(paste0("rm *",random.number,"*"))
