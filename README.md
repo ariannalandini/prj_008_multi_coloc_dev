@@ -103,6 +103,7 @@ Note this is the only essential option, if not provided the script will throw an
 
 ## To do
 - Patch `coloc.abf()` function to account for sample overlap
+- Check munging function to set "essential" info and "optional" info (code will run anyway if only esential info are provided)
 - ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
 - ~~Slim down output files? --> Implement new p-value filter discussed at last meeting~~ DONE
 - What about COJO collinearity? --> Use tryCatch()
