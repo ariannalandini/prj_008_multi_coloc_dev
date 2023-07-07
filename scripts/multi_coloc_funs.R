@@ -162,6 +162,8 @@ cojo.ht=function(D=datasets[[1]]
   dataset.list=list()
   dataset.list$ind.snps=ind.snp
   dataset.list$results=list()
+  
+  
   if(nrow(ind.snp)>1){
     for( i in 1:nrow(ind.snp)){
       
@@ -192,11 +194,16 @@ cojo.ht=function(D=datasets[[1]]
       
     }
   }else{
-    
+
+### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
-    system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-slct --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+    system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
     step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
-    step2.res=step2.res[,c("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno")]
+
+#### Add back top SNP, removed from the data frame with the conditioning step
+    step2.res <- rbind.fill(ind.snp,step2.res) %>%
+      select("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno")
+    
     dataset.list$results[[1]]=step2.res
     dataset.list$results[[1]]$sdY=1
     names(dataset.list$results)[1]=ind.snp$SNP[1]
