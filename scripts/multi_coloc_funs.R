@@ -310,29 +310,29 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         
         if(length(grep("bC",names(D1)))>0){
           
-          D1=D1[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq")]
-          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
+          D1=D1[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq", "sdY")]
+          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
           
         }else{
           
-          D1=D1[,c("SNP","Chr","bp","b","se","n","p","freq")]
-          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
+          D1=D1[,c("SNP","Chr","bp","b","se","n","p","freq", "sdY")]
+          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
         }
         
-        D1$type="quant"
+        D1$type="quant" #### to fix later (?) to allow also binary traits
         D1$varbeta=D1$varbeta^2
         D1=na.omit(D1)
         
         if(length(grep("bC",names(D2)))>0){
-          D2=D2[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq")]
-          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
+          D2=D2[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq", "sdY")]
+          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
         }else{
           
-          D2=D2[,c("SNP","Chr","bp","b","se","n","p","freq")]
-          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF")
+          D2=D2[,c("SNP","Chr","bp","b","se","n","p","freq", "sdY")]
+          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
         }
         
-        D2$type="quant"
+        D2$type="quant"  #### to fix later (?) to allow also binary traits
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
