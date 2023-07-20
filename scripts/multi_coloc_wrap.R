@@ -231,8 +231,8 @@ if(locus %in% hla_locus){
 ######## Filtering criteria to double-check with Nicola - SNPs with extremely significant pJ (but not p) are removed   
       final.locus.table.tmp <- as.data.frame(final.locus.table.tmp %>%
         group_by(sub_locus) %>%
-        mutate(flag=ifelse(any(p<5e-8 & pJ<1e-6 | pJ<5e-8), "keep", "remove")) %>%
-        mutate(flag=ifelse(p<5e-8 & pJ<1e-4, flag, "remove"))
+        mutate(flag=ifelse(any((p < 5e-8 & pJ < 1e-6) | pJ < 5e-8), "keep", "remove")) %>%
+        mutate(flag=ifelse((p < 5e-8 & pJ < 1e-4) | pJ < 5e-8, flag, "remove"))
       )
 
 ### Create pleiotropy table
@@ -332,20 +332,29 @@ if(locus %in% hla_locus){
 
 #### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
       fine.mapping.table <- as.data.frame(rbindlist(lapply(by_snp_PPH4_final, function(x){
-        merged_df <- x %>% 
+       
+         merged_df <- x %>% 
 # Merge by SNP dataframes from the same sub locus
           distinct(trait, snp, lABF, .keep_all = T) %>% ## also lABF, just to check that it stays the same for the same SNP-trait pairs
+          arrange(snp, trait) %>%
+          mutate(lABF_exp=exp(lABF)) %>% ### exp of log to go back to ABF
+          group_by(trait) %>% ### group by trait
+          mutate(lABF_std=log(lABF_exp/sum(lABF_exp))) %>%
           group_by(snp) %>%
-          mutate(lABF_sum=sum(lABF)) %>%
-          ungroup(snp) %>%
-          mutate(lABF_sum_scaled=exp(lABF_sum)/sum(exp(lABF_sum))) %>% ### Fix scaling
-          filter(lABF_sum_scaled==min(lABF_sum_scaled, na.rm=T)) ### Too strict??
-
+          mutate(lABF_sum=exp(sum(lABF_std))) %>%
+          ungroup()
+         
+        temp <- merged_df %>%
+          distinct(snp, g1, pan.locus, lABF_sum) %>%
+          mutate(tot=sum(lABF_sum)) %>% 
+          mutate(lABF_sum_scaled=lABF_sum/tot) %>%
+          filter(lABF_sum_scaled==max(lABF_sum_scaled)) %>%
+          select(snp, lABF_sum_scaled, pan.locus, g1)
         
-# Alternative: pick all SNPs with min value rounded by 3        
-#        min_value <- min(unique(round(merged_df$lABF_sum_scaled,3)),na.rm=T)
-#        merged_df <- merged_df %>% filter(round(lABF_sum_scaled,3)==min_value)
-        merged_df
+        final <- temp %>% left_join(merged_df %>% select(snp, trait, pan.locus, g1),
+          by=c("snp", "pan.locus", "g1"), multiple = "all")
+        
+        final
       })))
       
       fwrite(fine.mapping.table,
