@@ -11,7 +11,7 @@
 module load R/4.1.0
 
 ### The --vanilla option tells Rscript to run without saving or restoring anything in the process. This keeps things nice and clean
-Rscript --vanilla /group/pirastu/prj_008_multi_coloc_dev/scripts/locus_breaker_wrap.R \
+Rscript --vanilla prj_008_multi_coloc_dev/scripts/locus_breaker_wrap.R \
 --path "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/sum_stats" \
 --pref "ukbb_topmed_" \
 --suf "_normalised.tsv.gz" \
