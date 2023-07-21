@@ -27,7 +27,9 @@ option_list <- list(
   make_option("--pvalue", type="character", default="P", 
               help="Name of p-value of effect column", metavar="character"),
   make_option("--output", type="character", default="./multi_coloc", 
-              help="Path and name of output directory", metavar="character")
+              help="Path and name of output directory", metavar="character"),
+  make_option("--grch", type="numeric", default="38", 
+              help="Genomic build of GWAS summary statistics", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -63,12 +65,25 @@ loci.table <- fread(opt$input) %>%
 locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 #locus=604
 
+
+# Set HLA coordinates. See:
+# GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
+# GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
+
+# Set start and end of HLA locus 
+if(opt$grch==38){
+  hla_start=28510120
+  hla_end=33480577
+} else {
+  hla_start=28477797
+  hla_end=33448354
+}
+
 ## Identify loci falling in HLA region
-## Coordinates taken from this paper https://www.sciencedirect.com/science/article/pii/S1357272520301990
 hla_locus <- unique((
   loci.table %>%
     filter(chr==6) %>%
-    mutate(flag=data.table::between(28510120, start, end) | data.table::between(33480577, start, end)) %>%
+    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>%
     filter(flag==TRUE))$pan_locus)
 
 ## Don't run for HLA loci as cojo will take forever - possibly add other regions?
