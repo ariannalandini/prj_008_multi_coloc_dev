@@ -7,12 +7,12 @@
 ## Description
 Performs:
 
-1) Loci identification:
-    1.1) Identification of trait-specific loci
+1) Loci identification:\
+    1.1) Identification of trait-specific loci\
     1.2) Collapsing of across traits overlapping loci into larger genomic regions
 
-2) Association signals​ untangling​
-    2.1) Identification of independent association signals​ by trait
+2) Association signals​ untangling​\
+    2.1) Identification of independent association signals​ by trait\
     2.2) Leave-one-out approach to “clean” single association signal
 
 3) Colocalisation
@@ -22,7 +22,6 @@ Performs:
 
 ## Installation
 Clone this repository
-- Should we create a specific environment with all R packages used/COJO ?
 
 
 ## Quick start
@@ -83,6 +82,7 @@ This can either be the raw p-value or the log10 transformed one.\
 Finally, specify the number of traits (whose GWAS summary statistics are present at the input path) for which the script should be run in the `#SBATCH --array` option.
 
 
+
 2) Collapsing of across traits overlapping loci into larger genomic regions
 
 To collapse overlapping loci from multiple traits into genomic regions, run the **`prj_008_multi_coloc_dev/cntl/p10_locus_lister.sbatch`** script, providing:\
@@ -97,6 +97,7 @@ Note this is the only essential option, if not provided the script will throw an
     `--se`: Name of standard error of effect column in loci tables (default: SE)\
     `--pval`: Name of p-value of effect column in loci tables (default: P)\
     `--out`: Path to and name of the pan loci file.\
+
 
 
 3) Run colocalisation and fine mapping
