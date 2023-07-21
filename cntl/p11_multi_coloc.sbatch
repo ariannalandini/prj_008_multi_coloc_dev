@@ -23,5 +23,6 @@ Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --n "N" \
 --effect "BETA" \
 --se "SE" \
---pvalue "P" 
+--pvalue "P" \
+--grch 38
 
