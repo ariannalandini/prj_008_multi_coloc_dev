@@ -14,7 +14,7 @@
 library(optparse)
 
 ### Function
-source("/group/pirastu/prj_004_variant2function/scripts/loci_identification_funs.R")
+source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
 
 ### Set arguments
 
