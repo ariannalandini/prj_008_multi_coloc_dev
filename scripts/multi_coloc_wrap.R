@@ -1,7 +1,7 @@
 ### Multicoloc
 suppressMessages(library(optparse))
 suppressMessages(library(tidyr))
-source("/prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
+source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 option_list <- list(
   make_option("--input", type="character", default=NULL, 
