@@ -101,6 +101,7 @@ Note this is the only essential option, if not provided the script will throw an
 
 
 3) Run colocalisation and fine mapping
+
 To perform association signals​ untangling, colocalisation and fine mapping, run the **`prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch`** script, providing:\
     `--input`: path and name of the pan loci table previously created.\
 Note this is the only essential option, if not provided the script will throw an error and stop.\
@@ -115,6 +116,7 @@ Note this is the only essential option, if not provided the script will throw an
     `--effect`: Name of the effect size column in GWAS summary statistics (default: "BETA") \
     `--se`: Name of standard error of effect column in GWAS summary statistics (default: "SE") \
     `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: "P")
+    `--grch`: Genomic build of GWAS summary statistics (default: 38) \
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
 
