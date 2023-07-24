@@ -75,23 +75,37 @@ if (all(sum_stat[[opt$pvalue]] >= 0 & sum_stat[[opt$pvalue]] <= 1)) {
     mutate(P=10^(-sum_stat[[opt$pvalue]]))
   opt$pvalue="P"
 }
+
+
+### Check if there's any SNP at p-value lower than the set threshold. Otherwise stop here
+
+if(any(sum_stat[[opt$pvalue]] < opt$sig_pval)){
   
 ### Loci identification
-trait.res <- locus.breaker(sum_stat,
-              p.sig=opt$sig_pval,
-              p.limit=opt$limit,
-              hole.size=opt$hole,
-              p.label=opt$pvalue,
-              chr.label=opt$chr,
-              pos.label=opt$pos)
+  trait.res <- locus.breaker(sum_stat,
+                p.sig=opt$sig_pval,
+                p.limit=opt$limit,
+                hole.size=opt$hole,
+                p.label=opt$pvalue,
+                chr.label=opt$chr,
+                pos.label=opt$pos)
+  
+  ### Extract trait name. Discard option(s) where "/" is in the name
+  trait_name <- sapply(opt$path_list, function(x){gsub(paste0(x, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)}, USE.NAMES=FALSE)
+  trait_name <- trait_name[which(!grepl("/", trait_name))]
+  
+  ### Add trait name and GWAS sum stat path to the loci table (needed later for coloc). Save
+  trait.res <- trait.res %>% mutate(trait=trait_name, path=gwas)
+  cat(paste0("\n", nrow(trait.res), " loci identified for ", trait_name, "\n"))
+  fwrite(trait.res, paste0(opt$out, "/", trait_name, "_loci.tsv"), sep="\t", quote=F, na=NA)
 
-### Extract trait name. Discard option(s) where "/" is in the name
-trait_name <- sapply(opt$path_list, function(x){gsub(paste0(x, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)}, USE.NAMES=FALSE)
-trait_name <- trait_name[which(!grepl("/", trait_name))]
+  } else {
+  ### Extract trait name. Discard option(s) where "/" is in the name
+  trait_name <- sapply(opt$path_list, function(x){gsub(paste0(x, "/", opt$pref, "(.*)", opt$suf), "\\1", gwas)}, USE.NAMES=FALSE)
+  trait_name <- trait_name[which(!grepl("/", trait_name))]
+  cat(paste0("\nNo SNP passed the significant p-value thershold set for trait ", trait_name))
+}
 
-### Add trait name and GWAS sum stat path to the loci table (needed later for coloc). Save
-trait.res <- trait.res %>% mutate(trait=trait_name, path=gwas)
-cat(paste0("\n", nrow(trait.res), " loci identified for ", trait_name, "\n"))
-fwrite(trait.res, paste0(opt$out, "/", trait_name, "_loci.tsv"), sep="\t", quote=F, na=NA)
+
 
 cat("\n**** DONE!! ****\n")
