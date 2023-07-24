@@ -102,7 +102,7 @@ if(locus %in% hla_locus){
   
   if(opt$grch==37){
     ## Reference map for munging
-    mappa <- fread("/processing_data/shared_datasets/ukbiobank/genotypes#/LD_reference/ld_reference_bfiles#/ukbb_all_30000_random_unrelated_white_british.bim")
+    mappa <- fread("/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british.bim")
     ## LD reference panel (30k random unrelated british UKBB)
     bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
   }
