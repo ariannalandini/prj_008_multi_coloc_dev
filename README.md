@@ -115,7 +115,7 @@ Note this is the only essential option, if not provided the script will throw an
     `--n`: Name of the sample size column in GWAS summary statistics (default: "N") \
     `--effect`: Name of the effect size column in GWAS summary statistics (default: "BETA") \
     `--se`: Name of standard error of effect column in GWAS summary statistics (default: "SE") \
-    `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: "P")
+    `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: "P") \
     `--grch`: Genomic build of GWAS summary statistics (default: 38) \
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
