@@ -74,7 +74,8 @@ locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 if(opt$grch==38){
   hla_start=28510120
   hla_end=33480577
-} else {
+}
+if(opt$grch==37){
   hla_start=28477797
   hla_end=33448354
 }
@@ -86,13 +87,26 @@ hla_locus <- unique((
     mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>%
     filter(flag==TRUE))$pan_locus)
 
-## Don't run for HLA loci as cojo will take forever - possibly add other regions?
+## Don't run for HLA loci as cojo will take forever
 if(locus %in% hla_locus){
   cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
 } else {
 
-## Reference map for munging
-  mappa <- fread("/group/pirastu/prj_004_variant2function/coloc/ghrc38_reference/ukbb_grch38_map.tsv")
+## Define reference files for munging and cojo based on genomic build
+  if(opt$grch==38){
+    ## Reference map for munging
+    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv")
+    ## LD reference panel (30k random unrelated british UKBB)
+    bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
+  }
+  
+  if(opt$grch==37){
+    ## Reference map for munging
+    mappa <- fread("/processing_data/shared_datasets/ukbiobank/genotypes#/LD_reference/ld_reference_bfiles#/ukbb_all_30000_random_unrelated_white_british.bim")
+    ## LD reference panel (30k random unrelated british UKBB)
+    bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
+  }
+  
   
 ## GWAS info
   file.list <- unique(loci.table$path)
@@ -147,9 +161,6 @@ if(locus %in% hla_locus){
   saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
   #datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
 ############################################################## 
-  
-## LD reference panel (30k random unrelated british UKBB)
-  bfile="/group/pirastu/prj_004_variant2function/coloc/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
   
   conditional.datasets=list()
   max.loci=1
