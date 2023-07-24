@@ -28,7 +28,7 @@ option_list <- list(
               help="Name of p-value of effect column", metavar="character"),
   make_option("--output", type="character", default="./multi_coloc", 
               help="Path and name of output directory", metavar="character"),
-  make_option("--grch", type="numeric", default="38", 
+  make_option("--grch", type="integer", default=38, 
               help="Genomic build of GWAS summary statistics", metavar="character")
 ); 
 
