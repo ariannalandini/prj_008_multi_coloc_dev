@@ -95,14 +95,14 @@ if(locus %in% hla_locus){
 ## Define reference files for munging and cojo based on genomic build
   if(opt$grch==38){
     ## Reference map for munging
-    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv")
+    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
     ## LD reference panel (30k random unrelated british UKBB)
     bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
   }
   
   if(opt$grch==37){
     ## Reference map for munging
-    mappa <- fread("/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british.bim")
+    mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
     ## LD reference panel (30k random unrelated british UKBB)
     bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
   }

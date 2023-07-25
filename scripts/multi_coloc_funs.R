@@ -55,13 +55,18 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
   }else{
     stop("snp.lab has not been defined or the column is missing")
   }
+
+######################################
   
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
-  dataset <- dataset %>%
-    mutate(SNP=ifelse(grepl("rs", SNP), SNP, paste0(SNP, "_", A1, "_", A2)))
-
-  dataset=dataset[which(dataset$SNP %in% map$SNP),]
   
+  
+##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
+  dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset_gc$SNP)
+#####
+  
+  dataset=dataset[which(dataset$SNP %in% map$SNP),] ### losing a lot of SNPs!
+
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
     names(dataset)[names(dataset)==chr.lab]="CHR"
   }else{
@@ -94,8 +99,11 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
   
   if(!is.null(pval.lab) & pval.lab%in%names(dataset)){
     names(dataset)[names(dataset)==pval.lab]="P"
+### Check if p-value column provided is log10 transformed. If yes, compute original p-value
+    if (!all(dataset$P >= 0 & dataset$P <= 1)) {
+      dataset <- dataset %>% mutate(P=10^(-P))
+    }
   }else{
-    
     dataset$P=pchisq((dataset$BETA/dataset$SE)^2,df=1,lower=F)
   }
   
