@@ -62,7 +62,7 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
   
   
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
-  dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset_gc$SNP)
+  dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
 #####
   
   dataset=dataset[which(dataset$SNP %in% map$SNP),] ### losing a lot of SNPs!
