@@ -198,7 +198,6 @@ if(locus %in% hla_locus){
 # Prepare final locus.table for coloc
     final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp)
 
-
 ### Run colocalisation and store results
     final.colocs.summary=c()
     final.colocs.results=c()
@@ -391,8 +390,8 @@ if(locus %in% hla_locus){
       
   }else{
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
-    final.locus.table.tmp$start=locus.info$start
-    final.locus.table.tmp$end=locus.info$end
+    final.locus.table.tmp$start=unique(locus.info$start)
+    final.locus.table.tmp$end=unique(locus.info$end)
     final.locus.table.tmp$pan.locus=locus
     final.locus.table.tmp$sub_locus=1
     final.locus.table.tmp$freq_geno=NA
@@ -408,7 +407,8 @@ if(locus %in% hla_locus){
     final.locus.table.tmp=final.locus.table.tmp[,col.order]
   }
   
-  final.locus.table=as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) %>% select(-flag) ######## If no coloc, no flag?
+  final.locus.table <- as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) 
+  if("flag" %in% names(final.locus.table)){final.locus.table <- final.locus.table %>% select(-flag) }
   print(final.locus.table)
   
   write.table(final.locus.table, file=paste0(opt$output, "/results/locus_", locus, "_final_locus_table.tsv"),
