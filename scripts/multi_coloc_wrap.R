@@ -233,6 +233,7 @@ if(locus %in% hla_locus){
 # Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
     final.colocs.H4 <- final.colocs.summary[index,]
     by_snp_PPH4 <- final.colocs.results[index]
+    by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)]
     
  
 ### Define colocalisation groups
@@ -331,11 +332,7 @@ if(locus %in% hla_locus){
       colocalization.table.H4 <- colocalization.table.H4 %>%
         filter(flag.x=="keep" & flag.y=="keep") %>%
         select(-flag.x, -flag.y)
-        
-      write.table(colocalization.table.H4,
-        file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"),
-        row.names=F,quote=F,sep="\t")
-    
+  
 # Result output of coloc
       by_snp_PPH4_final <- by_snp_PPH4[index2]
 
@@ -352,42 +349,97 @@ if(locus %in% hla_locus){
           select(-t1,-t2)
       })
 
+# Merge in single data frame and then re-split by trait            
+      test <- rbindlist(by_snp_PPH4_final) %>% group_split(trait)
+
+      test <- lapply(test, function(x){
+        temp <- x %>% distinct(snp, .keep_all = T) %>%
+          mutate(bf=exp(lABF)) %>% 
+          arrange(desc(bf)) %>% 
+          mutate(pp.cv = bf/sum(bf)) %>% 
+          mutate(cred.set = cumsum(pp.cv)) %>%
+          arrange(cred.set) ### just to be extra sure
+        w <- which(temp$cred.set > 0.99)[1] ### do not hard code 99%
+        
+        ### CUMULATIVE SUM PLOT (to keep?)
+        #        library(ggplot2)
+        ggplot(temp %>% mutate(label=seq(1:nrow(temp))), aes(x=label, y=cred.set)) +
+          geom_line() +
+          geom_point(temp %>% mutate(label=seq(1:nrow(temp))) %>% slice(1:w), mapping=aes(x=label, y=cred.set, color="red"), show.legend = FALSE) +
+          #          scale_x_continuous(breaks=seq(0, nrow(temp), 500)) + #### automatic breaks?
+          ggtitle(paste0("99% credible set (in red) for ", unique(temp$trait)," (locus ", unique(temp$pan.locus), ", sublocus ",  unique(temp$g1), ")")) +
+          xlab("Number of SNPs") + theme(axis.title.y=element_blank())
+        ggsave(paste0(opt$output, "/plots/locus_", locus, "_sublocus_", unique(temp$g1), "_", unique(temp$trait), "_99_credible_set.png"), width=30, height = 12, units = "cm")
+        
+        temp <- temp %>% slice(1:w)
+        temp
+      })
+      
+### Credible set intersection
+      inter <- rbindlist(test) %>%
+        group_by(g1) %>%
+        mutate(n_traits=length(unique(trait))) %>%
+        group_by(g1,snp) %>%
+        mutate(
+          n_snps=length(unique(trait)),
+          flag=n_traits==n_snps,
+          joint.pp.cv=sum(pp.cv)
+          ) %>%
+        ungroup() %>%
+        filter(flag==TRUE) %>%
+        select(-n_traits,-n_snps, -flag) %>%
+        distinct(snp, .keep_all=T) %>%
+        select(pan.locus,g1,snp,joint.pp.cv) %>%
+        group_by(g1) %>%
+        mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
+        ungroup() %>%
+        arrange(g1, desc(joint.pp.cv))
+      
+  ### Add cs to H4 coloc table
+      colocalization.table.H4 <- colocalization.table.H4 %>%
+        left_join(
+          rbindlist(lapply(inter %>% group_split(g1), function(x){
+            x %>% 
+              mutate(cs=paste0(x$snp, collapse=",")) %>%
+              distinct(pan.locus,g1,cs)
+          })), by=c("pan.locus", "g1"))
+        
+      write.table(colocalization.table.H4,
+        file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"), row.names=F,quote=F,sep="\t")    
+ 
+           
+############################################################## Joint PP      
 # Merge in single data frame and then re-split by sub locus            
-      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
+#      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
 
 #### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
-      fine.mapping.table <- as.data.frame(rbindlist(lapply(by_snp_PPH4_final, function(x){
+#      fine.mapping.table <- as.data.frame(rbindlist(lapply(by_snp_PPH4_final, function(x){
        
-         merged_df <- x %>% 
+#         merged_df <- x %>% 
 # Merge by SNP dataframes from the same sub locus
-          distinct(trait, snp, lABF, .keep_all = T) %>% ## also lABF, just to check that it stays the same for the same SNP-trait pairs
-          arrange(snp, trait) %>%
-          mutate(lABF_exp=exp(lABF)) %>% ### exp of log to go back to ABF
-          group_by(trait) %>% ### group by trait
-          mutate(lABF_std=log(lABF_exp/sum(lABF_exp))) %>%
-          group_by(snp) %>%
-          mutate(lABF_sum=exp(sum(lABF_std))) %>%
-          ungroup()
+#          distinct(trait, snp, lABF, .keep_all = T) %>% ## also lABF, just to check that it stays the same for the same SNP-trait pairs
+#          arrange(snp, trait) %>%
+#          mutate(lABF_exp=exp(lABF)) %>% ### exp of log to go back to ABF
+#          group_by(trait) %>% ### group by trait
+#          mutate(lABF_std=log(lABF_exp/sum(lABF_exp))) %>%
+#          group_by(snp) %>%
+#          mutate(lABF_sum=exp(sum(lABF_std))) %>%
+#          ungroup()
          
-        temp <- merged_df %>%
-          distinct(snp, g1, pan.locus, lABF_sum) %>%
-          mutate(tot=sum(lABF_sum)) %>% 
-          mutate(lABF_sum_scaled=lABF_sum/tot) %>%
-          filter(lABF_sum_scaled==max(lABF_sum_scaled)) %>%
-          select(snp, lABF_sum_scaled, pan.locus, g1)
+#        temp <- merged_df %>%
+#          distinct(snp, g1, pan.locus, lABF_sum) %>%
+#          mutate(tot=sum(lABF_sum)) %>% 
+#          mutate(lABF_sum_scaled=lABF_sum/tot) %>%
+#          filter(lABF_sum_scaled==max(lABF_sum_scaled)) %>%
+#          select(snp, lABF_sum_scaled, pan.locus, g1)
         
-        final <- temp %>% left_join(merged_df %>% select(snp, trait, pan.locus, g1),
-          by=c("snp", "pan.locus", "g1"), multiple = "all")
+#        final <- temp %>% left_join(merged_df %>% select(snp, trait, pan.locus, g1),
+#          by=c("snp", "pan.locus", "g1"), multiple = "all")
         
-        final
-      })))
-      
-      fwrite(fine.mapping.table,
-        paste0(opt$output, "/results/locus_", locus, "_fine_mapping.table.tsv"),
-        sep="\t", quote=F, na=NA)
+#        final
+#      })))
+###############################################################
 
-
-      
   }else{
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
     final.locus.table.tmp$start=unique(locus.info$start)
