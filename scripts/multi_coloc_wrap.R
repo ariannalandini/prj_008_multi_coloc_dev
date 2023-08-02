@@ -342,17 +342,18 @@ if(locus %in% hla_locus){
 # Add sub locus info in result output of coloc    
           left_join(colocalization.table.H4 %>% select(t1,hit1,t2,hit2,g1),
             by=c("t1","hit1","hit2","t2")) %>% 
-          select(snp, matches("lABF"), t1,t2,g1,pan.locus) %>%
+          select(snp, matches("lABF"), t1,hit1,t2,hit2,g1,pan.locus) %>%
 # Move lABF values in a single column (SNPs duplicated by trait)          
-          gather("trait", "lABF", -snp,-t1,-t2,-g1,-pan.locus) %>%
+          gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus,-g1) %>%
           mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
-          select(-t1,-t2)
+          mutate(cojo_hit=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
+          select(-hit1,-hit2,-t1,-t2)
       })
 
 # Merge in single data frame and then re-split by trait            
-      test <- rbindlist(by_snp_PPH4_final) %>% group_split(trait)
+      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(trait)
 
-      test <- lapply(test, function(x){
+      by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
         temp <- x %>% distinct(snp, .keep_all = T) %>%
           mutate(bf=exp(lABF)) %>% 
           arrange(desc(bf)) %>% 
@@ -376,7 +377,7 @@ if(locus %in% hla_locus){
       })
       
 ### Credible set intersection
-      inter <- rbindlist(test) %>%
+      inter <- rbindlist(by_snp_PPH4_final) %>%
         group_by(g1) %>%
         mutate(n_traits=length(unique(trait))) %>%
         group_by(g1,snp) %>%
@@ -389,7 +390,7 @@ if(locus %in% hla_locus){
         filter(flag==TRUE) %>%
         select(-n_traits,-n_snps, -flag) %>%
         distinct(snp, .keep_all=T) %>%
-        select(pan.locus,g1,snp,joint.pp.cv) %>%
+        select(pan.locus,g1,cojo_hit,snp,joint.pp.cv) %>%
         group_by(g1) %>%
         mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
         ungroup() %>%
