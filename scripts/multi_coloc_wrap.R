@@ -351,7 +351,7 @@ if(locus %in% hla_locus){
       })
 
 # Merge in single data frame and then re-split by trait            
-      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(trait)
+      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(trait,cojo_hit)
 
       by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
         temp <- x %>% distinct(snp, .keep_all = T) %>%
@@ -377,7 +377,7 @@ if(locus %in% hla_locus){
       })
       
 ### Credible set intersection
-      inter <- rbindlist(by_snp_PPH4_final) %>%
+      inter_info <- rbindlist(by_snp_PPH4_final) %>%
         group_by(g1) %>%
         mutate(n_traits=length(unique(trait))) %>%
         group_by(g1,snp) %>%
@@ -388,14 +388,16 @@ if(locus %in% hla_locus){
           ) %>%
         ungroup() %>%
         filter(flag==TRUE) %>%
-        select(-n_traits,-n_snps, -flag) %>%
+        select(-n_traits,-n_snps, -flag) 
+      
+      inter <- inter_info %>%
         distinct(snp, .keep_all=T) %>%
-        select(pan.locus,g1,cojo_hit,snp,joint.pp.cv) %>%
+        select(pan.locus,g1,snp,joint.pp.cv) %>%
         group_by(g1) %>%
         mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
         ungroup() %>%
         arrange(g1, desc(joint.pp.cv))
-      
+        
   ### Add cs to H4 coloc table
       colocalization.table.H4 <- colocalization.table.H4 %>%
         left_join(
