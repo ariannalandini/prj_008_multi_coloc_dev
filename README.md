@@ -88,14 +88,6 @@ Finally, specify the number of traits (whose GWAS summary statistics are present
 To collapse overlapping loci from multiple traits into genomic regions, run the **`prj_008_multi_coloc_dev/cntl/p10_locus_lister.sbatch`** script, providing:\
     `--loci_path`: path to directory where all trait-specific loci table created by the previous step are stored.\
 Note this is the only essential option, if not provided the script will throw an error and stop.\
-    `--snp`: Name of rsid column in loci tables (default: ID) \
-    `--chr`: Name of chromosome column in loci tables (default: CHROM)\
-    `--pos`: Name of genetic position column in loci tables (default: GENPOS)\
-    `--a1`: Name of effect allele column in loci tables (default: ALLELE1) 
-    `--a0`: Name of NON effect allele column in loci tables (default: ALLELE0)\ 
-    `--effect`: Name of effect size column in loci tables (default: BETA)\ 
-    `--se`: Name of standard error of effect column in loci tables (default: SE)\
-    `--pval`: Name of p-value of effect column in loci tables (default: P)\
     `--out`: Path to and name of the pan loci file.\
 
 
