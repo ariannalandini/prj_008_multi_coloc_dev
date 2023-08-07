@@ -61,7 +61,7 @@ system(paste0("mkdir -p ", opt$output, "/results"))
 ## Load-in pan locus table and sort by pan locus number
 loci.table <- fread(opt$input)
 
-# If pan locus tabe is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name
+# If pan locus tabel is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name - fix this
 if("pan_locus_name" %in% names(loci.table)){
 # Assign pan locus start/end to trait-specific locus start/end
   loci.table <- loci.table %>% mutate(
@@ -69,6 +69,23 @@ if("pan_locus_name" %in% names(loci.table)){
     end=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\3", pan_locus_name))
   )
 }
+
+# If pan locus table is NOT produced through loci identification script, it will not report the pan_locus index - add it
+if(!("pan_locus" %in% names(loci.table))){
+
+# Takes forever!  
+#  loci.table <- loci.table %>%
+#    arrange(chr,start,end) %>%
+#    group_by(chr,start,end) %>%
+#    mutate(pan_locus2=group_indices())
+
+  loci.table <- loci.table %>% arrange(chr,start,end) %>% group_split(chr,start,end)
+  loci.table <- lapply(loci.table, function(x) as.data.frame(x))
+  for(i in 1:length(loci.table)){
+    loci.table[[i]] <- as.data.frame(loci.table[[i]]) %>% mutate(pan_locus=i)}
+  loci.table <- as.data.frame(rbindlist(loci.table))
+}
+
 ### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
 loci.table <- loci.table %>% select(any_of(c("chr","start","end","trait","path","pan_locus","type","sdY","s"))) %>% distinct()
 
