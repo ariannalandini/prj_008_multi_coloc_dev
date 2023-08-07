@@ -153,7 +153,7 @@ if(locus %in% hla_locus){
 ## Munge files
   datasets <- lapply(loci.table.tmp %>% group_split(trait), function(x){
     dataset.munge(
-      sumstats.file=x$path
+      x$path
       ,map = mappa.loc
       ,snp.lab = opt$rsid
       ,chr.lab = opt$chr
@@ -165,8 +165,8 @@ if(locus %in% hla_locus){
       ,freq.lab = opt$freq
       ,pval.lab = opt$pvalue
       ,n.lab = opt$n
-      ,type = x$type
-      ,sdY = x$sdY
+      ,type = x$type ### better to add this directly to the GWAS sum stats?
+      ,sdY = x$sdY ### better to add this directly to the GWAS sum stats?
       ,s = x$s
     )
   })

@@ -16,7 +16,7 @@ suppressMessages(library(dplyr))
 
 
 ### dataset.munge ###
-dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/gwas_uc-cd-psc-ra-sle-t1d-jia-asthma-derma/07_colocalization/munged/cd_munged_build37.txt"
+dataset.munge=function(sumstats.file
                         ,map=mappa.loc
                         ,snp.lab="SNP"
                         ,chr.lab="CHR"
@@ -28,8 +28,8 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
                         ,pval.lab="P"
                         ,freq.lab="FRQ"
                         ,n.lab="N"
-                        ,type="quant"
-                        ,sdY=1
+                        ,type=NULL
+                        ,sdY=NULL
                         ,s=NULL
 ){
 
@@ -57,7 +57,15 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
     stop("snp.lab has not been defined or the column is missing")
   }
 
-######################################
+  if(!is.null(type)){
+    dataset <- dataset %>% mutate(type=type)
+  }else{
+    stop("type has not been defined or the column is missing")
+  }
+  
+  
+  
+  ######################################
   
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
   
@@ -66,7 +74,7 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
   dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
 #####
   
-  dataset=dataset[which(dataset$SNP %in% map$SNP),] ### losing a lot of SNPs!
+  dataset <- dataset[which(dataset$SNP %in% map$SNP),] ### losing a lot of SNPs!
 
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
     names(dataset)[names(dataset)==chr.lab]="CHR"
@@ -128,15 +136,23 @@ dataset.munge=function(sumstats.file="/project/aid_sharing/AID_sharing/outputs/g
   dataset=dataset[,c("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N")]
   dataset$type=type
   
-  if(type=="cc"){
+  if(type=="cc" && !(is.null(s))){
     dataset$s=s
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
-  }else if(type=="quant"){
-    dataset$sdY=sdY
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
-  }else{
-    stop("Type has to be either 'cc' or 'quant'")
+  } else if(type=="cc" && is.null(s)){
+#### Is this correct?? Is "s" strictly necessary for cc traits??
+    stop("Please provide s, the proportion of samples who are cases")
   }
+#### 
+  if(type=="quant" && !(is.null(sdY))){
+    dataset$sdY <- sdY
+    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
+  } else if(type=="quant" && is.null(sdY)){
+    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
+  }
+
+  if(!(type=="cc") && !(type=="quant")){stop("Type has to be either 'cc' or 'quant'")}
   dataset
 }
 
@@ -645,4 +661,30 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
     top.snp$trait=matric[,2]
   }
   top.snp
+}
+
+
+## Taken from coloc package https://github.com/chr1swallace/coloc/blob/HEAD/R/claudia.R
+##' Estimate trait standard deviation given vectors of variance of coefficients,  MAF and sample size
+##'
+##' Estimate is based on var(beta-hat) = var(Y) / (n * var(X))
+##' var(X) = 2*maf*(1-maf)
+##' so we can estimate var(Y) by regressing n*var(X) against 1/var(beta)
+##' 
+##' @title Estimate trait variance, internal function
+##' @param vbeta vector of variance of coefficients
+##' @param maf vector of MAF (same length as vbeta)
+##' @param n sample size
+##' @return estimated standard deviation of Y
+##' 
+##' @author Chris Wallace
+sdY.est <- function(vbeta, maf, n) {
+  warning("estimating sdY from maf and varbeta, please directly supply sdY if known")
+  oneover <- 1/vbeta
+  nvx <- 2 * n * maf * (1-maf)
+  m <- lm(nvx ~ oneover - 1)
+  cf <- coef(m)[['oneover']]
+  if(cf < 0)
+    stop("estimated sdY is negative - this can happen with small datasets, or those with errors.  A reasonable estimate of sdY is required to continue.")
+  return(sqrt(cf))
 }
