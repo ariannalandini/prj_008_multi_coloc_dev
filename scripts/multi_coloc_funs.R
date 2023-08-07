@@ -10,6 +10,7 @@ suppressMessages(library(igraph))
 suppressMessages(library(RColorBrewer))
 suppressMessages(library(ggnet))
 suppressMessages(library(patchwork))
+suppressMessages(library(stringi))
 suppressMessages(library(plyr))
 suppressMessages(library(dplyr))
 
@@ -148,7 +149,6 @@ cojo.ht=function(D=datasets[[1]]
                  ,bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/p01_output/ukbb_all_30000_random_unrelated_white_british"
                  ,p.tresh=1e-4){
   
-  library(stringi)
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
   write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
@@ -157,12 +157,14 @@ cojo.ht=function(D=datasets[[1]]
   freqs=fread(paste0(random.number,".frqx"))
   freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")])))
   D$FREQ=freqs$FreqA1[match(D$snp,freqs$SNP)]
-  idx=which(D$a1!=freqs$A1  )
+  idx=which(D$a1!=freqs$A1)
   D$FREQ[idx]=1-D$FREQ[idx]
   D$se=sqrt(D$varbeta)
+
+  D <- D %>%
+    select("snp","a1","a0","FREQ","beta","se","pvalues","N","type", any_of(c("sdY","s"))) %>%
+    rename("SNP"="snp","A1"="a1","A2"="a0","freq"="FREQ","b"="beta","p"="pvalues")
   
-  D=D[,c("snp","a1","a0","FREQ","beta","se","pvalues","N")]
-  names(D)=c("SNP" , "A1" ,  "A2"  , "freq", "b"  ,  "se" ,  "p" ,   "N")
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
   #step1 determine independent snps
   system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-slct --out ",random.number,"_step1"))
@@ -174,7 +176,7 @@ cojo.ht=function(D=datasets[[1]]
   
   
   if(nrow(ind.snp)>1){
-    for( i in 1:nrow(ind.snp)){
+    for(i in 1:nrow(ind.snp)){
       
       write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
       print(ind.snp$SNP[-i])
@@ -195,26 +197,31 @@ cojo.ht=function(D=datasets[[1]]
 #      )
       
 ############
-      
-      step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
+
+# Re-add type and sdY/s info            
+      step2.res <- cbind(
+        fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE),
+        D %>% select(type, any_of(c("sdY", "s"))) %>% slice(1:(n()-1))
+      )
       dataset.list$results[[i]]=step2.res
-      dataset.list$results[[i]]$sdY=1 ### add estimate of phenotypic variance
       names(dataset.list$results)[i]=ind.snp$SNP[i]
-      
     }
+    
   }else{
 
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
-    step2.res=fread(paste0(random.number,"_step2.cma.cojo"),data.table = FALSE)
+    step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE)
 
 #### Add back top SNP, removed from the data frame with the conditioning step
-    step2.res <- rbind.fill(ind.snp,step2.res) %>%
-      select("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno")
+    step2.res <- cbind(
+      rbind.fill(ind.snp,step2.res) %>%
+        select("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno"),
+      D %>% select(type, any_of(c("sdY", "s")))
+    )
     
     dataset.list$results[[1]]=step2.res
-    dataset.list$results[[1]]$sdY=1
     names(dataset.list$results)[1]=ind.snp$SNP[1]
   }
   system(paste0("rm *",random.number,"*"))
@@ -316,36 +323,31 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D1=conditional.dataset1$results[[i]]     
         D2=conditional.dataset2$results[[j]] 
         
-        if(length(grep("bC",names(D1)))>0){
-          
-          D1=D1[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq", "sdY")]
-          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
-          
+        if(length(grep("bC", names(D1)))>0){
+          D1 <- D1 %>%
+            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
+            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
         }else{
-          
-          D1=D1[,c("SNP","Chr","bp","b","se","n","p","freq", "sdY")]
-          names(D1)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
+          D1 <- D1 %>%
+            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
+            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
         }
-        
-        D1$type="quant" #### to fix later (?) to allow also binary traits
         D1$varbeta=D1$varbeta^2
         D1=na.omit(D1)
         
-        if(length(grep("bC",names(D2)))>0){
-          D2=D2[,c("SNP","Chr","bp","bC","bC_se","n","pC","freq", "sdY")]
-          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
+        if(length(grep("bC", names(D2)))>0){
+          D2 <- D2 %>%
+            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
+            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
         }else{
-          
-          D2=D2[,c("SNP","Chr","bp","b","se","n","p","freq", "sdY")]
-          names(D2)=c("snp","chr","position","beta","varbeta","N","pvalues","MAF", "sdY")
+          D2 <- D2 %>%
+            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
+            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
         }
-        
-        D2$type="quant"  #### to fix later (?) to allow also binary traits
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
-        colo.res=coloc.abf(D1,D2)
-
+        colo.res <- suppressWarnings(coloc.abf(D1,D2)) ### BETTER NOT TO SUPPRESS WARNINGS?
 ## Save coloc summary        
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
@@ -353,7 +355,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
 #        coloc.summary=rbind(coloc.summary,colo.sum)
 
 ## Save coloc result by SNP
-        colo.full_res=colo.res$results %>% 
+        colo.full_res <- colo.res$results %>% 
           select(snp,position,lABF.df1,lABF.df2,SNP.PP.H4) %>% 
           mutate(hit1=i, hit2=j)
         colo.all <- list(summary=colo.sum, results=colo.full_res)
