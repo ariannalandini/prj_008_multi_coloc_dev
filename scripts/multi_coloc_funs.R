@@ -56,26 +56,19 @@ dataset.munge=function(sumstats.file
   }else{
     stop("snp.lab has not been defined or the column is missing")
   }
-
-  if(!is.null(type)){
+  
+  if(!is.null(type) | !(type=="cc") | !(type=="quant")){
     dataset <- dataset %>% mutate(type=type)
   }else{
-    stop("type has not been defined or the column is missing")
+    stop("Type has not been defined or has been defined incorrectly - it has to be either 'cc' or 'quant'")
   }
-  
-  
-  
-  ######################################
-  
+ 
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
-  
-  
+
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
   dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
 #####
   
-  dataset <- dataset[which(dataset$SNP %in% map$SNP),] ### losing a lot of SNPs!
-
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
     names(dataset)[names(dataset)==chr.lab]="CHR"
   }else{
@@ -115,8 +108,27 @@ dataset.munge=function(sumstats.file
   }else{
     dataset$P=pchisq((dataset$BETA/dataset$SE)^2,df=1,lower=F)
   }
+# Add variance of beta  
+  dataset$varbeta=dataset$SE^2
   
-  dataset=dataset[match(map$SNP,dataset$SNP),]
+# Add sdY/s
+  if(type=="cc" && !(is.null(s))){
+    dataset$s=s
+  } else if(type=="cc" && is.null(s)){
+    #### Is this correct?? Is "s" strictly necessary for cc traits??
+    stop("Please provide s, the proportion of samples who are cases")
+  }
+
+  if(type=="quant" && !(is.null(sdY))){
+    dataset$sdY <- sdY
+  } else if(type=="quant" && is.null(sdY)){
+    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+  }
+  
+
+# Match with locus reference map
+  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
+  dataset <- dataset[match(map$SNP,dataset$SNP),]
   
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
@@ -132,27 +144,15 @@ dataset.munge=function(sumstats.file
   dataset$A1=flip.t$a1
   dataset$A2=flip.t$a0
   dataset$BETA=flip.t$beta
-  dataset$varbeta=dataset$SE^2
-  dataset=dataset[,c("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N")]
-  dataset$type=type
   
-  if(type=="cc" && !(is.null(s))){
-    dataset$s=s
+  dataset <- dataset %>%
+    select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N", "type", any_of(c("s", "sdY")))
+  
+  if(type=="cc"){
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
-  } else if(type=="cc" && is.null(s)){
-#### Is this correct?? Is "s" strictly necessary for cc traits??
-    stop("Please provide s, the proportion of samples who are cases")
-  }
-#### 
-  if(type=="quant" && !(is.null(sdY))){
-    dataset$sdY <- sdY
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
-  } else if(type=="quant" && is.null(sdY)){
-    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+  } else if(type=="quant"){
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
   }
-
-  if(!(type=="cc") && !(type=="quant")){stop("Type has to be either 'cc' or 'quant'")}
   dataset
 }
 
