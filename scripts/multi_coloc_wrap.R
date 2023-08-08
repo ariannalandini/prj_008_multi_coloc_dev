@@ -146,7 +146,7 @@ if(locus %in% hla_locus){
   
 # Define genomic region
   loci.table.tmp=loci.table[loci.table$pan_locus==locus,]
-#  locus.info=loci.table.tmp ### Who uses this?
+  locus.info=loci.table.tmp
   
   start=min(loci.table.tmp$start)-100000
   end=max(loci.table.tmp$end)+100000
