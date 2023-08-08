@@ -1,18 +1,18 @@
-#library(qgraph)
-suppressMessages(library(corrplot))
-suppressMessages(library(coloc))
-#library(susieR)
-suppressMessages(library(data.table))
-suppressMessages(library(bigsnpr))
-suppressMessages(library(ggplot2))
-suppressMessages(library(easyGgplot2))
-suppressMessages(library(igraph))
-suppressMessages(library(RColorBrewer))
-suppressMessages(library(ggnet))
-suppressMessages(library(patchwork))
-suppressMessages(library(stringi))
-suppressMessages(library(plyr))
-suppressMessages(library(dplyr))
+###library(qgraph)
+###library(susieR)
+#suppressMessages(library(corrplot))
+#suppressMessages(library(coloc))
+#suppressMessages(library(data.table))
+#suppressMessages(library(bigsnpr))
+#suppressMessages(library(ggplot2))
+#suppressMessages(library(easyGgplot2))
+#suppressMessages(library(igraph))
+#suppressMessages(library(RColorBrewer))
+#suppressMessages(library(ggnet))
+#suppressMessages(library(patchwork))
+#suppressMessages(library(stringi))
+#suppressMessages(library(plyr))
+#suppressMessages(library(dplyr))
 
 
 ### dataset.munge ###
@@ -247,8 +247,8 @@ cojo.ht=function(D=datasets[[1]]
 
 ### plot.cojo.ht ###
 plot.cojo.ht=function(cojo.ht.obj){
-  library(ggplot2)
-  library(patchwork)
+#  library(ggplot2)
+#  library(patchwork)
   
   if(nrow(cojo.ht.obj$ind.snps)>1){
     
@@ -504,7 +504,7 @@ locus.joyplot=function(x, window.size=10000, susie.res=susie.list){
     start=start+window.size/2
   }
   
-  library(reshape2)
+#  library(reshape2)
   res.all=as.data.frame(res.all)
   ordine=hclust(as.dist(1-cor(as.matrix(res.all[,-1]),use ="pairwise.complete.obs")),method = "ward.D2")$order
   ordine=(names(res.all)[-1]) [ordine]
@@ -687,4 +687,19 @@ sdY.est <- function(vbeta, maf, n) {
   if(cf < 0)
     stop("estimated sdY is negative - this can happen with small datasets, or those with errors.  A reasonable estimate of sdY is required to continue.")
   return(sqrt(cf))
+}
+
+
+#### package.loader - Load packages if available, install them first if not
+# Check if the package is already installed
+package.loader <- function(package_name){
+  if(!require(package_name, character.only = TRUE)) {
+    # If not installed, install the package
+    install.packages(package_name)
+    # Load the package
+    library(package_name, character.only = TRUE)
+  } else {
+    # If already installed, just load the package
+    library(package_name, character.only = TRUE)
+  }
 }

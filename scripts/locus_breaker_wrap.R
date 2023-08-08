@@ -1,10 +1,14 @@
 #!/usr/bin/env Rscript
-library(data.table)
-library(optparse)
-library(dplyr)
 
-### Function
+### Load functions
 source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
+
+### Load necessary packages, if not available install them first
+package_list <- c("optparse", "data.table", "dplyr")
+for(package in package_list){
+  package.loader(package)
+}
+
 
 ### Array job
 num <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
