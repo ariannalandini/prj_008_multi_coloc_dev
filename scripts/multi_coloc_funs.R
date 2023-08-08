@@ -182,7 +182,8 @@ cojo.ht=function(D=datasets[[1]]
     rename("SNP"="snp","A1"="a1","A2"="a0","freq"="FREQ","b"="beta","p"="pvalues")
   
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
-  #step1 determine independent snps
+
+# step1 determine independent snps
   system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-slct --out ",random.number,"_step1"))
   
   ind.snp=fread(paste0(random.number,"_step1.jma.cojo"))
@@ -214,16 +215,20 @@ cojo.ht=function(D=datasets[[1]]
       
 ############
 
-# Re-add type and sdY/s info            
-      step2.res <- cbind(
-        fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE),
-        D %>% select(type, any_of(c("sdY", "s"))) %>% slice(1:(n()-1))
-      )
+# Re-add type and sdY/s info
+      type <- unique(D$type)
+      if(type=="quant"){
+        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+          mutate(type=type, sdY=unique(D$sdY))
+      } else if(type=="cc"){
+        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+          mutate(type=type, s=unique(D$s))
+      }
       dataset.list$results[[i]]=step2.res
       names(dataset.list$results)[i]=ind.snp$SNP[i]
     }
     
-  }else{
+  } else {
 
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
