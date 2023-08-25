@@ -85,7 +85,7 @@ locus.lister <- function(
 #  require(dplyr)
 
   loci_list <- list.files(path=my_path_loci, pattern="*_loci.tsv", full.names=T)
-  all_loci <- as.data.frame(rbindlist(lapply(loci_list, function(x) fread(x, data.table=F))))
+  all_loci <- as.data.frame(rbindlist(lapply(loci_list, function(x) fread(x, data.table=F)), fill=TRUE))
   cat("\nIdentify overlapping loci across traits\n")
   
   pan_loci <- reduce(GRanges(seqnames = all_loci$chr, IRanges(as.numeric(all_loci$start), as.numeric(all_loci$end)))) 
