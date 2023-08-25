@@ -41,7 +41,9 @@ option_list <- list(
   make_option("--output", type="character", default="./multi_coloc", 
               help="Path and name of output directory", metavar="character"),
   make_option("--grch", type="integer", default=38, 
-              help="Genomic build of GWAS summary statistics", metavar="character")
+              help="Genomic build of GWAS summary statistics", metavar="character"),
+  make_option("--maf", type="numeric", default=0.0001, 
+              help="MAF filter", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -190,7 +192,7 @@ if(locus %in% hla_locus){
   max.loci=1
   
   for(i in 1:length(datasets)){
-    tmp=cojo.ht(D=datasets[[i]], p.tresh=1e-4, bfile=bfile)
+    tmp=cojo.ht(D=datasets[[i]], p.tresh=1e-4, maf.thresh=opt$maf, bfile=bfile)
     conditional.datasets[[i]]=tmp
     names(conditional.datasets)[i]=names(datasets)[i]
     max.loci=max(max.loci,nrow(tmp$ind.snps))

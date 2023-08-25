@@ -163,12 +163,13 @@ cojo.ht=function(D=datasets[[1]]
                  ,plink.bin="/project/alfredo/software/plink/1.90_20210606/plink"
                  ,gcta.bin="/project/alfredo/software/GCTA/1.94.0beta/gcta64"
                  ,bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/p01_output/ukbb_all_30000_random_unrelated_white_british"
-                 ,p.tresh=1e-4){
+                 ,p.tresh=1e-4
+                 ,maf.thresh=0.0001){
   
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
   write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
-  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf 0.0001 --make-bed --freqx --out ",random.number))
+  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --freqx --out ",random.number))
   
   freqs=fread(paste0(random.number,".frqx"))
   freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")])))
@@ -184,7 +185,7 @@ cojo.ht=function(D=datasets[[1]]
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
 
 # step1 determine independent snps
-  system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-slct --out ",random.number,"_step1"))
+  system(paste0(gcta.bin," --bfile ", random.number, " --cojo-p ", p.tresh, " --maf ", maf.thresh, " --extract ", random.number, ".snp.list --cojo-file ", random.number, "_sum.txt --cojo-slct --out ", random.number, "_step1"))
   
   ind.snp=fread(paste0(random.number,"_step1.jma.cojo"))
   dataset.list=list()
@@ -198,7 +199,7 @@ cojo.ht=function(D=datasets[[1]]
       write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
       print(ind.snp$SNP[-i])
       
-      system(paste0(gcta.bin," --bfile ",random.number,"  --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt  --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+      system(paste0(gcta.bin," --bfile ",random.number, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
       
 #### KEEP WORKING FROM HERE ###### try catch COJO errors - commented out for not breaking the code until this piece in finished
       
@@ -232,7 +233,7 @@ cojo.ht=function(D=datasets[[1]]
 
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
-    system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh," --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+    system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
     step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE)
 
 #### Add back top SNP, removed from the data frame with the conditioning step
