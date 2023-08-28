@@ -258,7 +258,7 @@ if(locus %in% hla_locus){
 # Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
     final.colocs.H4 <- final.colocs.summary[index,]
     by_snp_PPH4 <- final.colocs.results[index]
-#    by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)] ### Not necessary if we no longer plot PP by SNP
+    by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)]
     
  
 ### Define colocalisation groups
@@ -401,7 +401,6 @@ if(locus %in% hla_locus){
       })
       
 ### Credible set intersection
-# Parts commented out required for joint PP and final plot - but seem no longer necessary?
       inter_info <- rbindlist(by_snp_PPH4_final) %>%
         group_by(g1) %>%
         mutate(n_traits=length(unique(trait))) %>%
@@ -409,19 +408,20 @@ if(locus %in% hla_locus){
         mutate(
           n_snps=length(unique(trait)),
           flag=n_traits==n_snps,
- #         joint.pp.cv=sum(pp.cv)
+          joint.pp.cv=sum(pp.cv)
           ) %>%
         ungroup() %>%
         filter(flag==TRUE) %>%
         select(-n_traits,-n_snps, -flag) 
       
       inter <- inter_info %>%
-        distinct(snp, .keep_all=T) #%>%
-#        select(pan.locus,g1,snp,joint.pp.cv) #%>%
-#        group_by(g1) %>%
-#        mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
-#        ungroup() %>%
-#        arrange(g1, desc(joint.pp.cv))
+        distinct(snp, .keep_all=T) %>%
+        select(pan.locus,g1,snp,joint.pp.cv) %>%
+        group_by(g1) %>%
+        mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
+        filter(joint.pp.cv==max(joint.pp.cv, na.rm=T)) %>%
+        ungroup() #%>%
+        #arrange(g1, desc(joint.pp.cv))
         
   ### Add cs to H4 coloc table
       colocalization.table.H4 <- colocalization.table.H4 %>%
