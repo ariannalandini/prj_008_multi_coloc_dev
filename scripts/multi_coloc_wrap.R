@@ -9,7 +9,7 @@
 source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 ### Load necessary packages, if not available install them first
-package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2","easyGgplot2","igraph","RColorBrewer","ggnet","patchwork","stringi","reshape2","plyr","dplyr")
+package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2","easyGgplot2","cowplot","igraph","RColorBrewer","ggnet","patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","dplyr")
 for(package in package_list){
   package.loader(package)
 }
@@ -320,7 +320,7 @@ if(locus %in% hla_locus){
    
 ### Plot coloc
       coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
-    } else {
+    }else{
       idx=which(is.na(final.locus.table.tmp$sub_locus))
       pri=1
       final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
@@ -468,7 +468,12 @@ if(locus %in% hla_locus){
 #      })))
 ###############################################################
 
-  }else{
+  }
+  
+### Final summary plot    
+    final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3,inter=inter,output=opt$output)
+    
+  } else {
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
     final.locus.table.tmp$start=unique(locus.info$start)
     final.locus.table.tmp$end=unique(locus.info$end)
@@ -479,7 +484,6 @@ if(locus %in% hla_locus){
     final.locus.table.tmp$bJ_se=NA
     final.locus.table.tmp$pJ=NA
     final.locus.table.tmp$LD_r=NA
-          
     alleles=unlist(mappa.loc[mappa.loc$SNP==final.locus.table.tmp$SNP,c("A1","A2")])
     final.locus.table.tmp$othA=alleles[!(alleles%in%final.locus.table.tmp$refA)]
     final.locus.table.tmp$trait=names(datasets)[1]
@@ -488,7 +492,8 @@ if(locus %in% hla_locus){
   }
   
   final.locus.table <- as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) 
-  if("flag" %in% names(final.locus.table)){final.locus.table <- final.locus.table %>% select(-flag) }
+  if("flag" %in% names(final.locus.table)){
+    final.locus.table <- final.locus.table %>% select(-flag) }
   
   if(exists("colocalization.table.H4")){
     final.locus.table <- final.locus.table %>% left_join(rbind(
@@ -501,7 +506,6 @@ if(locus %in% hla_locus){
   
   write.table(final.locus.table, file=paste0(opt$output, "/results/locus_", locus, "_final_locus_table.tsv"),
     row.names=F,quote=F,sep="\t")
-  }
 }
 
 cat("\n**** DONE!! ****\n")

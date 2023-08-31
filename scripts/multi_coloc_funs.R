@@ -56,11 +56,14 @@ dataset.munge=function(sumstats.file
   }else{
     stop("snp.lab has not been defined or the column is missing")
   }
-  
-  if(!is.null(type) | !(type=="cc") | !(type=="quant")){
-    dataset <- dataset %>% mutate(type=type)
-  }else{
+
+### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
+  if(exists("type")){
+    if(type=="cc" | type=="quant"){
+      dataset <- dataset %>% mutate(type=type)
+    } else {
     stop("Type has not been defined or has been defined incorrectly - it has to be either 'cc' or 'quant'")
+    }
   }
  
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
@@ -709,3 +712,277 @@ package.loader <- function(package_name){
     library(package_name, character.only = TRUE)
   }
 }
+
+
+#### final.plot - Final summary plot function
+final.plot <- function(locus,
+                       final.locus.table.tmp,
+                       conditional.datasets,
+                       by_snp_PPH3,
+                       inter=NULL, ### not necessarily present!
+                       output=opt$output
+){
+  
+  ### Among NOT colocalising traits, extract SNP having the highest lABF (scaled)
+  by_snp_PPH3_final <- rbindlist(lapply(by_snp_PPH3, function(x){
+    x %>%
+      dplyr::select(-position, -SNP.PP.H4) %>%
+      gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus) %>%
+      mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
+      mutate(cojo_snp=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
+      dplyr::select(-hit1,-hit2,-t1,-t2)
+  })) %>% group_split(trait, cojo_snp)
+  
+  by_snp_PPH3_final <- as.data.frame(rbindlist(lapply(by_snp_PPH3_final, function(x){
+    x %>% distinct(snp, .keep_all = T) %>%
+      mutate(bf=exp(lABF)) %>% 
+      arrange(desc(bf)) %>% 
+      mutate(joint.pp.cv = bf/sum(bf)) %>%
+      dplyr::filter(joint.pp.cv==max(joint.pp.cv))
+  }))) %>% 
+    dplyr::select(pan.locus, trait, cojo_snp, snp, joint.pp.cv) %>%
+    dplyr::rename(causal_snp=snp)
+  
+  
+  #### Final locus table - flag colocalising and not colocalising groups
+  loci_table <- final.locus.table.tmp %>%
+    dplyr::select(pan.locus, sub_locus, trait, SNP) %>%
+    group_by(sub_locus) %>%
+    mutate(coloc_out=ifelse(n()>1, "H4", "H3")) %>%
+    dplyr::rename(cojo_snp=SNP)
+  
+  ### H4 traits - add SNPs with highest joint.pp.cv among intersection cs
+  #loci_table %>% 
+  #  filter(coloc_out=="H4") %>%
+  #  left_join(inter, by=c("pan.locus", "sub_locus"="g1"))
+  
+  ### H4 - extract cs intersection SNP having highest joint lABF
+  #inter <- inter %>% 
+  #  group_by(g1) %>%
+  #  filter(joint.pp.cv==max(joint.pp.cv)) %>%
+  #  rename(causal_snp=snp, pp.cv=joint.pp.cv) %>%
+  #  left_join(inter_info %>% select(-bf,-pp.cv,-cred.set,-joint.pp.cv,-lABF), by=c("causal_snp"="snp","g1","pan.locus"), multiple = "all")
+  
+  
+  ### Extract beta infor from conditional datasets  
+  data_sub <- unlist(conditional.datasets, recursive=F)
+  
+  ## Retrieve only conditioned results
+  data_sub <- data_sub[grep("results", names(data_sub))]
+  
+  # Another round of unlisting
+  data_sub <- unlist(data_sub, recursive=F)
+  
+  # Add trait and cojo hit as dataframe columns
+  for(i in 1:length(data_sub)){
+    data_sub[[i]] <- data_sub[[i]] %>% 
+      mutate(trait=gsub("(\\w+).results.(.*$)", "\\1", names(data_sub)[[i]]),
+             cojo_snp=gsub("(\\w+).results.(.*$)", "\\2", names(data_sub)[[i]])
+      )
+  }
+  data_sub <- as.data.frame(rbindlist(data_sub, fill=TRUE))
+  
+  
+  #### ASSEMBLE FINAL TABLE FOR PLOTTING
+  
+  if(any(loci_table$coloc_out=="H4")){
+    final <- rbind(
+      # H3  
+      loci_table %>% 
+        dplyr::filter(coloc_out=="H3") %>%
+        left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp")),
+      # H4  
+      loci_table %>%
+        dplyr::filter(coloc_out=="H4") %>%
+        left_join(inter %>% dplyr::rename(causal_snp=snp),
+                  by=c("pan.locus", "sub_locus"="g1"), multiple="all")
+    )
+  } else {
+    final <- loci_table %>% 
+      dplyr::filter(coloc_out=="H3") %>%
+      left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp"))
+  }
+  
+  final <- as.data.frame(
+    final %>% left_join(data_sub, by=c("causal_snp"="SNP", "trait", "cojo_snp")) %>%
+      dplyr::select(pan.locus,sub_locus,trait,causal_snp,Chr,bp,freq,b,bC,p,pC,joint.pp.cv) %>%
+      ## Adjustment for plotting
+      mutate(beta=ifelse(is.na(bC), b, bC)) %>%
+      mutate(dir=ifelse(beta<0, "-", "+")) %>%
+      mutate(group=paste0(sub_locus, " ", causal_snp)) %>%
+      arrange(bp)
+  )
+  
+  #### To delete - just for script developing sake
+  #  fwrite(final,
+  #         paste0(opt$output, "/results/locus_", locus, "_table_for_final_plot.tsv"),
+  #         sep="\t", quote=F, na=NA)
+  
+  
+  #### PLOT #### 
+  
+  # Set plot boundiaries  
+  bp_max = max(final$bp) + 250000
+  bp_min = min(final$bp) - 250000
+  chr = unique(final$Chr)
+  
+  ### Plot 1 - causal SNPs beta
+  x_axis <- gsub("\\d+ (.*)", "\\1", unique(final$group))
+  
+  p1 <- ggplot(final %>% arrange(bp)) + 
+    geom_point(aes(x=as.factor(group), y=trait, size=beta, color=dir)) +
+    theme_bw() +
+    ylab("Magnitude and\ndirection of effect\n") +
+    guides(size = "none") +
+    scale_color_manual(values = c("-"="#10b090", "+"="#dc143c")) +
+    scale_x_discrete(labels=x_axis) +
+    guides(color=guide_legend(title="Direction of effect   ", override.aes=list(size=4)
+    )) +
+    theme(
+      legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
+      legend.text = element_text(size = 12, vjust=0.5),
+      legend.title = element_text(size = 10, vjust=0.5),
+      legend.position = "bottom",
+      legend.direction="horizontal",
+      axis.title.x = element_blank(),
+      axis.text.x = element_text(size=9),#, angle=45, hjust=1),
+      axis.text.y = element_text(size=9),
+      panel.border = element_rect(color = "black", fill=NA, linewidth=1)
+    )
+  
+  
+  ### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
+  
+  # Reproduce spacing between dots from the p1 plot 
+  n.groups <- length(unique(final$group))
+  spacing <- (bp_max-bp_min)/(n.groups+1)
+  breaks <- (bp_min + (seq(0,(n.groups+1))*spacing))[-c(1,(n.groups+2))]
+  
+  p2 <- ggplot(final %>%
+                 distinct(group, .keep_all=T) %>%
+                 dplyr::select(causal_snp, bp, group) %>%
+                 mutate(breaks=breaks), 
+               aes(x = bp)) +
+    geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), color="black") +
+    geom_segment(aes(y=0, yend=0.5, x=bp, xend=breaks), color="black") +
+    #  geom_text(aes(y=1.02, x=breaks, label=gsub("\\d+ (.*)", "\\1", group)), vjust = 0) +
+    scale_y_continuous(expand=c(0,0)) +
+    theme_bw() +
+    theme(
+      axis.title.x = element_blank(),
+      axis.title.y = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank()
+    )
+  
+  
+  ### Plot 3 - gene annotation
+  
+  # Retrieve info on the genes
+  ref_genes <- genes(EnsDb.Hsapiens.v75)
+  ref_genes <- ref_genes[ref_genes@elementMetadata$gene_biotype=='protein_coding',]
+  ind <- findOverlaps(GRanges(seqnames=chr,IRanges(start=bp_min,end=bp_max)),ref_genes,type="any")
+  a <- ref_genes[ind@to,]
+  
+  granges2df <- function(x) {
+    df <- as(x, "data.frame")
+    df <- df[,c("seqnames","start","end","strand","group_name",'exon_id')]
+    colnames(df)[1] <- "chromosome"
+    colnames(df)[5] <- "transcript"
+    df
+  }
+  
+  
+  txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
+                            keys=keys(EnsDb.Hsapiens.v75, "GENEID"),
+                            columns=c("GENEID","TXID", 'SYMBOL'),
+                            keytype="GENEID")
+  ebt <- exonsBy(EnsDb.Hsapiens.v75, by="tx")
+  
+  ## Arrange info about all transcripts
+  d <- list()
+  
+  for(i in 1:length(a@elementMetadata$gene_id)){
+    idx <- txdf$GENEID ==  a@elementMetadata$gene_id[i]
+    txs <- txdf$TXID[idx]
+    #all the xons for these transcripts
+    ebt2 <- ebt[txs]
+    df <- granges2df(ebt2)
+    df$gene <- a@elementMetadata$gene_id[i]
+    df$symbol <-  txdf[match(df$gene, txdf$GENEID), ]$SYMBOL 
+    d[[i]] <- df
+  }
+  
+  d <- do.call(rbind, d) %>%
+    mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
+  
+  gene.starts <- by(d$start,d$symbo,FUN = min)
+  gene.end <- by(d$end,d$symbo,FUN = max)
+  gene.strand <- by(d$y,d$symbo,FUN = unique)
+  
+  g.table=as.data.frame(cbind(gene.starts,gene.end,gene.strand))
+  g.table=g.table[order(g.table$gene.starts),]
+  
+  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
+  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
+  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
+  lab.table=rowMeans(g.table[,1:2])
+  lab.table=rowMeans(g.table[,1:2])
+  names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
+  names(lab.table)[c(FALSE,TRUE)] <- paste0("\n\n\n\n\n", names(lab.table)[c(FALSE,TRUE)])
+  
+  
+  ### Gene position - doesn't make a lot of sense with the two strands
+  p3 <- ggplot(g.table) +
+    geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
+    geom_rect(aes(xmin=gene.starts, xmax=gene.end, ymin=0.499, ymax=0.501, fill=gene.strand), color="black") +
+    geom_text(aes(y=0.5, x=lab.table, label=names(lab.table)),size=3.5) +
+    xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
+    scale_x_continuous(
+      limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
+      breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2)#,
+      #    expand=c(0.1,0.1)
+    ) +
+    scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
+    scale_fill_manual(values = c("-"="#ff8000", "+"="#007fff")) +
+    theme_bw() +
+    guides(fill=guide_legend(title="DNA strand   ")) +
+    theme(
+      legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
+      legend.text = element_text(size = 12, vjust=0.5),
+      legend.title = element_text(size = 10, vjust=0.5),
+      legend.position = "bottom",
+      legend.direction="horizontal",
+      legend.key.width = unit(0.5, "cm"),
+      legend.key.height = unit(0.5, "cm"),
+      axis.title.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.text.y = element_blank(),
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.border = element_blank(), ####
+      axis.line.x = element_line(color="black", linewidth=0.5),
+      axis.line.y = element_blank()
+    )
+  
+  ### Align all plots and legends
+  p1_legend <- get_legend(p1)
+  p3_legend <- get_legend(p3)
+  
+  arrange_p <- plot_grid(
+    p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 0.2, 0, 0.2), "cm")),
+    p2 + theme(plot.margin = unit(c(0.2, 0.2, 0, 0.2), "cm")),
+    p3 + theme(legend.position = "none", plot.margin = unit(c(0, 0.2, 0.5, 0.2), "cm")),
+    plot_grid(p1_legend,p3_legend, ncol=2),
+    align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
+  
+  ggsave(paste0(opt$output, "/locus_", locus, "_results_summary_plot_2.png"),
+         arrange_p, width=45, height=22, units="cm", bg="white")
+  
+} 
+
