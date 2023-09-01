@@ -818,26 +818,43 @@ final.plot <- function(locus,
   #         paste0(opt$output, "/results/locus_", locus, "_table_for_final_plot.tsv"),
   #         sep="\t", quote=F, na=NA)
   
+
+#### PLOT #### 
   
-  #### PLOT #### 
-  
-  # Set plot boundiaries  
+# Set plot boundiaries  
   bp_max = max(final$bp) + 250000
   bp_min = min(final$bp) - 250000
   chr = unique(final$Chr)
+
+### Plot 1 - causal SNPs beta
   
-  ### Plot 1 - causal SNPs beta
+# lock in factor level order
+  final$group <- factor(final$group, levels = unique(final$group))
+# Set x axis labels  
   x_axis <- gsub("\\d+ (.*)", "\\1", unique(final$group))
-  
-  p1 <- ggplot(final %>% arrange(bp)) + 
-    geom_point(aes(x=as.factor(group), y=trait, size=beta, color=dir)) +
-    theme_bw() +
+# Set spacing between each data point
+  spacing <- (bp_max-bp_min)/(length(x_axis)+1)
+# Calculate position of each data point based on spacing just calculated - so it's easier to match in the next plot!!
+  final <- as.data.frame(
+    final %>% 
+    group_by(group) %>%
+    mutate(group_index = cur_group_id()) %>%
+    mutate(breaks=bp_min+(spacing*group_index))
+  )
+
+  p1 <- ggplot(final) + 
+    geom_point(aes(x=breaks, y=trait, size=beta, color=dir)) +
+    scale_x_continuous(
+      limits=c(bp_min,bp_max),
+      expand=c(0,0),
+      breaks=unique(final$breaks),
+      labels=x_axis) +
     ylab("Magnitude and\ndirection of effect\n") +
-    guides(size = "none") +
     scale_color_manual(values = c("-"="#10b090", "+"="#dc143c")) +
-    scale_x_discrete(labels=x_axis) +
+    guides(size = "none") +
     guides(color=guide_legend(title="Direction of effect   ", override.aes=list(size=4)
     )) +
+    theme_bw() +
     theme(
       legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
       legend.text = element_text(size = 12, vjust=0.5),
@@ -847,25 +864,21 @@ final.plot <- function(locus,
       axis.title.x = element_blank(),
       axis.text.x = element_text(size=9),#, angle=45, hjust=1),
       axis.text.y = element_text(size=9),
-      panel.border = element_rect(color = "black", fill=NA, linewidth=1)
+      panel.border = element_rect(color = "black", fill=NA, linewidth=1),
+      panel.grid.minor = element_blank()
     )
   
   
-  ### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
+
+### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
   
-  # Reproduce spacing between dots from the p1 plot 
-  n.groups <- length(unique(final$group))
-  spacing <- (bp_max-bp_min)/(n.groups+1)
-  breaks <- (bp_min + (seq(0,(n.groups+1))*spacing))[-c(1,(n.groups+2))]
-  
-  p2 <- ggplot(final %>%
-                 distinct(group, .keep_all=T) %>%
-                 dplyr::select(causal_snp, bp, group) %>%
-                 mutate(breaks=breaks), 
-               aes(x = bp)) +
+  p2 <- ggplot(final %>% distinct(group, .keep_all=T), aes(x = bp)) +
     geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), color="black") +
     geom_segment(aes(y=0, yend=0.5, x=bp, xend=breaks), color="black") +
-    #  geom_text(aes(y=1.02, x=breaks, label=gsub("\\d+ (.*)", "\\1", group)), vjust = 0) +
+#    geom_text(aes(y=1.02, x=breaks, label=x_axis), vjust = 0) +
+    scale_x_continuous(
+      limits=c(bp_min,bp_max),
+      expand=c(0,0)) +
     scale_y_continuous(expand=c(0,0)) +
     theme_bw() +
     theme(
@@ -880,8 +893,8 @@ final.plot <- function(locus,
       panel.border = element_blank()
     )
   
-  
-  ### Plot 3 - gene annotation
+
+### Plot 3 - gene annotation
   
   # Retrieve info on the genes
   ref_genes <- genes(EnsDb.Hsapiens.v75)
@@ -896,7 +909,6 @@ final.plot <- function(locus,
     colnames(df)[5] <- "transcript"
     df
   }
-  
   
   txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
                             keys=keys(EnsDb.Hsapiens.v75, "GENEID"),
@@ -927,10 +939,18 @@ final.plot <- function(locus,
   
   g.table=as.data.frame(cbind(gene.starts,gene.end,gene.strand))
   g.table=g.table[order(g.table$gene.starts),]
+#  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
+#  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
+#  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
   
-  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
-  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
-  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
+  g.table <- g.table %>%
+    mutate(gene.starts=round(gene.starts/1e+6,2), gene.end=round(gene.end/1e+6,2)) %>%
+    mutate(gene.starts=ifelse(gene.starts<round(bp_min/1e+6,2),
+      round(bp_min/1e+6,2),gene.starts)) %>%
+    mutate(gene.end=ifelse(gene.end>round(bp_max/1e+6,2),
+                              round(bp_max/1e+6,2),gene.end)) 
+  
+  g.table$gene.strand <- as.character(g.table$gene.strand)
   lab.table=rowMeans(g.table[,1:2])
   lab.table=rowMeans(g.table[,1:2])
   names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
@@ -945,11 +965,14 @@ final.plot <- function(locus,
     xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
     scale_x_continuous(
       limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
-      breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2)#,
-      #    expand=c(0.1,0.1)
+      breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
+      expand=c(0.01,0.01)
     ) +
     scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
-    scale_fill_manual(values = c("-"="#ff8000", "+"="#007fff")) +
+    scale_fill_manual(
+      values = c("-1"="#ff8000", "1"="#007fff"),
+      labels = c("-","+")
+      ) +
     theme_bw() +
     guides(fill=guide_legend(title="DNA strand   ")) +
     theme(
@@ -965,7 +988,7 @@ final.plot <- function(locus,
       axis.text.y = element_blank(),
       panel.grid.major = element_blank(),
       panel.grid.minor = element_blank(),
-      panel.border = element_blank(), ####
+      panel.border = element_blank(),
       axis.line.x = element_line(color="black", linewidth=0.5),
       axis.line.y = element_blank()
     )
@@ -975,14 +998,13 @@ final.plot <- function(locus,
   p3_legend <- get_legend(p3)
   
   arrange_p <- plot_grid(
-    p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 0.2, 0, 0.2), "cm")),
-    p2 + theme(plot.margin = unit(c(0.2, 0.2, 0, 0.2), "cm")),
-    p3 + theme(legend.position = "none", plot.margin = unit(c(0, 0.2, 0.5, 0.2), "cm")),
+    p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 1, 0, 0.2), "cm")),
+    p2 + theme(plot.margin = unit(c(0.2, 1, 0, 2), "cm")),
+    p3 + theme(legend.position = "none", plot.margin = unit(c(0, 1, 0.5, 0.2), "cm")),
     plot_grid(p1_legend,p3_legend, ncol=2),
     align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
   
-  ggsave(paste0(opt$output, "/locus_", locus, "_results_summary_plot_2.png"),
+  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot_2.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
-  
 } 
 
