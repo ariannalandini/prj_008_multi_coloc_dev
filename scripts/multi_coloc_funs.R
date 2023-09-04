@@ -718,30 +718,32 @@ package.loader <- function(package_name){
 final.plot <- function(locus,
                        final.locus.table.tmp,
                        conditional.datasets,
-                       by_snp_PPH3,
+                       by_snp_PPH3=NULL, ### not necessarily present!
                        inter=NULL, ### not necessarily present!
                        output=opt$output
 ){
   
   ### Among NOT colocalising traits, extract SNP having the highest lABF (scaled)
-  by_snp_PPH3_final <- rbindlist(lapply(by_snp_PPH3, function(x){
-    x %>%
-      dplyr::select(-position, -SNP.PP.H4) %>%
-      gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus) %>%
-      mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
-      mutate(cojo_snp=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
-      dplyr::select(-hit1,-hit2,-t1,-t2)
-  })) %>% group_split(trait, cojo_snp)
-  
-  by_snp_PPH3_final <- as.data.frame(rbindlist(lapply(by_snp_PPH3_final, function(x){
-    x %>% distinct(snp, .keep_all = T) %>%
-      mutate(bf=exp(lABF)) %>% 
-      arrange(desc(bf)) %>% 
-      mutate(joint.pp.cv = bf/sum(bf)) %>%
-      dplyr::filter(joint.pp.cv==max(joint.pp.cv))
-  }))) %>% 
-    dplyr::select(pan.locus, trait, cojo_snp, snp, joint.pp.cv) %>%
-    dplyr::rename(causal_snp=snp)
+    if(length(by_snp_PPH3)>0){
+      by_snp_PPH3_final <- rbindlist(lapply(by_snp_PPH3, function(x){
+      x %>%
+        dplyr::select(-position, -SNP.PP.H4) %>%
+        gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus) %>%
+        mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
+        mutate(cojo_snp=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
+        dplyr::select(-hit1,-hit2,-t1,-t2)
+    })) %>% group_split(trait, cojo_snp)
+    
+    by_snp_PPH3_final <- as.data.frame(rbindlist(lapply(by_snp_PPH3_final, function(x){
+      x %>% distinct(snp, .keep_all = T) %>%
+        mutate(bf=exp(lABF)) %>% 
+        arrange(desc(bf)) %>% 
+        mutate(joint.pp.cv = bf/sum(bf)) %>%
+        dplyr::filter(joint.pp.cv==max(joint.pp.cv))
+    }))) %>% 
+      dplyr::select(pan.locus, trait, cojo_snp, snp, joint.pp.cv) %>%
+      dplyr::rename(causal_snp=snp)
+    }
   
   
   #### Final locus table - flag colocalising and not colocalising groups
@@ -786,22 +788,24 @@ final.plot <- function(locus,
   #### ASSEMBLE FINAL TABLE FOR PLOTTING
   
   if(any(loci_table$coloc_out=="H4")){
-    final <- rbind(
-      # H3  
-      loci_table %>% 
-        dplyr::filter(coloc_out=="H3") %>%
-        left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp")),
-      # H4  
-      loci_table %>%
-        dplyr::filter(coloc_out=="H4") %>%
-        left_join(inter %>% dplyr::rename(causal_snp=snp),
-                  by=c("pan.locus", "sub_locus"="g1"), multiple="all")
-    )
-  } else {
-    final <- loci_table %>% 
+    # H4  
+    temp_H4 <- loci_table %>%
+      dplyr::filter(coloc_out=="H4") %>%
+      left_join(inter %>% dplyr::rename(causal_snp=snp),
+                by=c("pan.locus", "sub_locus"="g1"), multiple="all")
+  }
+  
+  if(any(loci_table$coloc_out=="H3")){
+    # H3  
+    temp_H3 <- loci_table %>% 
       dplyr::filter(coloc_out=="H3") %>%
       left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp"))
+    
   }
+    
+  if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_h4,temp_H3) }  
+  if(exists("temp_H3") & !exists("temp_H4")){ final <- temp_H3 }  
+  if(!exists("temp_H3") & exists("temp_H4")){ final <- temp_H4 }  
   
   final <- as.data.frame(
     final %>% left_join(data_sub, by=c("causal_snp"="SNP", "trait", "cojo_snp")) %>%
@@ -952,9 +956,13 @@ final.plot <- function(locus,
   
   g.table$gene.strand <- as.character(g.table$gene.strand)
   lab.table=rowMeans(g.table[,1:2])
-  lab.table=rowMeans(g.table[,1:2])
+  
+  if(length(names(lab.table))>1){
   names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
   names(lab.table)[c(FALSE,TRUE)] <- paste0("\n\n\n\n\n", names(lab.table)[c(FALSE,TRUE)])
+  } else {
+    names(lab.table) <- paste0("\n\n\n", names(lab.table))
+  }
   
   
   ### Gene position - doesn't make a lot of sense with the two strands
