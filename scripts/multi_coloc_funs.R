@@ -240,10 +240,11 @@ cojo.ht=function(D=datasets[[1]]
     step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE)
 
 #### Add back top SNP, removed from the data frame with the conditioning step
+    step2.res <- rbind.fill(ind.snp,step2.res) %>%
+        select("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno")
     step2.res <- cbind(
-      rbind.fill(ind.snp,step2.res) %>%
-        select("Chr","SNP","bp","refA","freq","b","se","p","n","freq_geno"),
-      D %>% select(type, any_of(c("sdY", "s")))
+      step2.res,
+      D %>% select(type, any_of(c("sdY", "s"))) %>% slice_sample(n=nrow(step2.res))
     )
     
     dataset.list$results[[1]]=step2.res
