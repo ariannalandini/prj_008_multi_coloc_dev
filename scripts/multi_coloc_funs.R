@@ -767,7 +767,7 @@ final.plot <- function(locus,
   #  left_join(inter_info %>% select(-bf,-pp.cv,-cred.set,-joint.pp.cv,-lABF), by=c("causal_snp"="snp","g1","pan.locus"), multiple = "all")
   
   
-  ### Extract beta infor from conditional datasets  
+  ### Extract beta info from conditional datasets  
   data_sub <- unlist(conditional.datasets, recursive=F)
   
   ## Retrieve only conditioned results
@@ -801,7 +801,6 @@ final.plot <- function(locus,
     temp_H3 <- loci_table %>% 
       dplyr::filter(coloc_out=="H3") %>%
       left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp"))
-    
   }
     
   if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_h4,temp_H3) }  
@@ -810,14 +809,20 @@ final.plot <- function(locus,
   
   final <- as.data.frame(
     final %>% left_join(data_sub, by=c("causal_snp"="SNP", "trait", "cojo_snp")) %>%
-      dplyr::select(pan.locus,sub_locus,trait,causal_snp,Chr,bp,freq,b,bC,p,pC,joint.pp.cv) %>%
-      ## Adjustment for plotting
-      mutate(beta=ifelse(is.na(bC), b, bC)) %>%
-      mutate(dir=ifelse(beta<0, "-", "+")) %>%
-      mutate(group=paste0(sub_locus, " ", causal_snp)) %>%
-      arrange(bp)
-  )
-  
+      dplyr::select(pan.locus,sub_locus,trait,causal_snp,Chr,bp,freq,any_of(c("b","bC")),joint.pp.cv))
+
+## Adjustment for plotting
+    if("bC" %in% names(final)){
+      final <- final %>% mutate(beta=ifelse(is.na(bC), b, bC))
+    } else {
+      final <- final %>% mutate(beta=b)
+    }
+        
+  final <- final %>%
+        mutate(dir=ifelse(beta<0, "-", "+")) %>%
+        mutate(group=paste0(sub_locus, " ", causal_snp)) %>%
+        arrange(bp)
+
   #### To delete - just for script developing sake
   #  fwrite(final,
   #         paste0(opt$output, "/results/locus_", locus, "_table_for_final_plot.tsv"),
