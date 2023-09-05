@@ -471,7 +471,11 @@ if(locus %in% hla_locus){
   }
   
 ### Final summary plot    
-    final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)
+    tryCatch({
+      final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)}, error = function(e) {
+      cat("final.plot function failed for some reason and the plot was not produced. Ask Arianna")
+      })
+
     
   } else {
     final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
