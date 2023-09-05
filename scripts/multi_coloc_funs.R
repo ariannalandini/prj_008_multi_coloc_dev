@@ -803,7 +803,7 @@ final.plot <- function(locus,
       left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp"))
   }
     
-  if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_h4,temp_H3) }  
+  if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_H3,temp_H4) }  
   if(exists("temp_H3") & !exists("temp_H4")){ final <- temp_H3 }  
   if(!exists("temp_H3") & exists("temp_H4")){ final <- temp_H4 }  
   
