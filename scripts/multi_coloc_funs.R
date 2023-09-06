@@ -148,12 +148,13 @@ dataset.munge=function(sumstats.file
   dataset$A2=flip.t$a0
   dataset$BETA=flip.t$beta
   
-  dataset <- dataset %>%
-    select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N", "type", any_of(c("s", "sdY")))
-  
   if(type=="cc"){
+    dataset <- dataset %>%
+      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","s")
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
   } else if(type=="quant"){
+    dataset <- dataset %>%
+      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","sdY")
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
   }
   dataset
