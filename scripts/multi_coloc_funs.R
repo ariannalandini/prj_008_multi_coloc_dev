@@ -190,19 +190,19 @@ cojo.ht=function(D=datasets[[1]]
 # step1 determine independent snps
   system(paste0(gcta.bin," --bfile ", random.number, " --cojo-p ", p.tresh, " --maf ", maf.thresh, " --extract ", random.number, ".snp.list --cojo-file ", random.number, "_sum.txt --cojo-slct --out ", random.number, "_step1"))
   
-  ind.snp=fread(paste0(random.number,"_step1.jma.cojo"))
-  dataset.list=list()
-  dataset.list$ind.snps=ind.snp
-  dataset.list$results=list()
+  if(file.exists(paste0(random.number,"_step1.jma.cojo"))){
+    ind.snp=fread(paste0(random.number,"_step1.jma.cojo"))
+    dataset.list=list()
+    dataset.list$ind.snps=ind.snp
+    dataset.list$results=list()
   
-  
-  if(nrow(ind.snp)>1){
-    for(i in 1:nrow(ind.snp)){
+    if(nrow(ind.snp)>1){
+      for(i in 1:nrow(ind.snp)){
       
-      write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
-      print(ind.snp$SNP[-i])
+        write(ind.snp$SNP[-i],ncol=1,file=paste0(random.number,"_independent.snp"))
+        print(ind.snp$SNP[-i])
       
-      system(paste0(gcta.bin," --bfile ",random.number, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+        system(paste0(gcta.bin," --bfile ",random.number, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
       
 #### KEEP WORKING FROM HERE ###### try catch COJO errors - commented out for not breaking the code until this piece in finished
       
@@ -220,19 +220,19 @@ cojo.ht=function(D=datasets[[1]]
 ############
 
 # Re-add type and sdY/s info
-      type <- unique(D$type)
-      if(type=="quant"){
-        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+        type <- unique(D$type)
+        if(type=="quant"){
+          step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
           mutate(type=type, sdY=unique(D$sdY))
-      } else if(type=="cc"){
-        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+        } else if(type=="cc"){
+          step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
           mutate(type=type, s=unique(D$s))
+        }
+        dataset.list$results[[i]]=step2.res
+        names(dataset.list$results)[i]=ind.snp$SNP[i]
       }
-      dataset.list$results[[i]]=step2.res
-      names(dataset.list$results)[i]=ind.snp$SNP[i]
-    }
     
-  } else {
+    } else {
 
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
@@ -249,9 +249,10 @@ cojo.ht=function(D=datasets[[1]]
     
     dataset.list$results[[1]]=step2.res
     names(dataset.list$results)[1]=ind.snp$SNP[1]
+    }
   }
   system(paste0("rm *",random.number,"*"))
-  dataset.list
+  if(exists("dataset.list")){dataset.list}
 }
 
 
