@@ -67,10 +67,12 @@ locus.breaker <- function(
       }
     }
   }
-  trait.res = as.data.frame(trait.res, stringsAsFactors = FALSE)
-  trait.res = trait.res[, -(which(names(trait.res) == chr.label))]
-  names(trait.res)[1:3] = c("chr", "start", "end")
-  rownames(trait.res) <- NULL
+  if(!is.null(trait.res)){
+    trait.res = as.data.frame(trait.res, stringsAsFactors = FALSE)
+    trait.res = trait.res[, -(which(names(trait.res) == chr.label))]
+    names(trait.res)[1:3] = c("chr", "start", "end")
+    rownames(trait.res) <- NULL
+  }
   return(trait.res)
 }
 
