@@ -14,6 +14,7 @@ locus.breaker <- function(
   res = res[order(as.numeric(res[, chr.label]), as.numeric(res[,pos.label])), ]
   res = res[which(res[, p.label] < p.limit), ]
   trait.res = c()
+  # TODO: for(j in unique(res[,chr.label]))
   for (j in 1:22) {
     res.chr = res[which(res[, chr.label] == j), ]
     if (nrow(res.chr) > 1) {
