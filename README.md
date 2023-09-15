@@ -1,6 +1,5 @@
 # Multiple traits colocalisation and fine mapping
 
- - Goal of the pipeline
  - Link to paper(s) of interest
 
 
@@ -25,7 +24,10 @@ Clone this repository
 
 
 ## Quick start
-- Give minimum example (example data needed?)
+
+Prerequisites: GWAS summary statistics should ALL use the same column names. It doesn't matter if the columns are not in the same order or not all columns are present in all summary statistics, as long as columns in common have the same name. Also, summary statistics should be in the same human genome build (either 37 or 38).
+
+Give minimum example (example data needed?)
 
 To obtain trait-specific loci, provide the path where your GWAS summary statistics are located as argument to the `--path` option in the `p09_locus_breaker.sbatch`
 ```
@@ -127,6 +129,7 @@ Finally, specify the number of genomic regions (identified in the previous step)
 
 
 ## To do
+- Create conda environment for R packages needed
 - ~~Patch `coloc.abf()` function to account for sample overlap~~ No need according to Sodbo's simulations
 - Check munging function to set "essential" info and "optional" info (code will run anyway if only esential info are provided)
 - ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
