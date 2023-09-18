@@ -1,6 +1,7 @@
 # Multiple traits colocalisation and fine mapping
 
- - Link to paper(s) of interest
+ - [Giambartolomei C, Vukcevic D, Schadt EE, Franke L, Hingorani AD, Wallace C, et al. Bayesian test for colocalisation between pairs of genetic association studies using summary statistics. PLoS Genet. 2014;10(5):e1004383](https://doi.org/10.1371/journal.pgen.1004383)
+ - [Yang J, Ferreira T, Morris AP et al. . Conditional and joint multiple-SNP analysis of GWAS summary statistics identifies additional variants influencing complex traits. Nat. Genet. 2012;44(4):369–375,S1–S3](doi:10.1038/ng.2213)
 
 
 ## Description
@@ -25,9 +26,23 @@ Clone this repository
 
 ## Quick start
 
-Prerequisites: GWAS summary statistics should ALL use the same column names. It doesn't matter if the columns are not in the same order or not all columns are present in all summary statistics, as long as columns in common have the same name. Also, summary statistics should be in the same human genome build (either 37 or 38).
+**Prerequisites:** GWAS summary statistics should use identical column names, irrespective of whether the columns are in a different order or not all columns are present in every set of summary statistics. Additionally, the summary statistics must be based on the same human genome build (either 37 or 38).
 
-Give minimum example (example data needed?)
+
+| CHROM | GENPOS | ID           | ALLELE0 | ALLELE1 | A1FREQ | N      | BETA    | SE     | LOG10P |
+|-------|--------|--------------|---------|---------|--------|--------|---------|--------|--------|
+| 1     | 10894	 | 1:10894      | A       | G       | 0.9993 | 367458 |  0.0368 | 0.0763 | 0.2011 |
+| 1     | 11171	 | 1:11171      | C       | CCTTG   | 0.9588 | 367458 |  0.0005 | 0.0109 | 0.0161 |
+| 1     | 13973	 | 1:13973      | C       | T       | 0.9997 | 367458 | -0.0866 | 0.1608 | 0.229  |
+| 1     | 14003	 | 1:14003      | T       | C       | 0.9998 | 367458 | -0.0498 | 0.1627 | 0.1194 |
+| 1     | 14022	 | 1:14022      | A       | G       | 0.9998 | 367458 |  0.0461 | 0.1777 | 0.0993 |
+| 1     | 23197	 | rs1220638906 | T       | TTAAAA  | 0.9942 | 367458 | -0.038  | 0.0285 | 0.7407 |
+<br>
+
+
+<br>
+
+
 
 To obtain trait-specific loci, provide the path where your GWAS summary statistics are located as argument to the `--path` option in the `p09_locus_breaker.sbatch`
 ```
