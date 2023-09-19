@@ -16,12 +16,12 @@ Performs:
 
 4) Finemapping of likely causal variant (for each group of colocalasing traits) using coloc posterior probability by SNP
 <br>
-
+<br>
 
 ## Installation
 Clone this repository
 <br>
-
+<br>
 
 ## Required inputs
 
@@ -73,14 +73,14 @@ The loci table can be either produced by using the `p09_locus_breaker.sbatch` an
 
 **!!! VERY IMPORTANT !!!**\
 When generating the loci table using the `p09_locus_breaker.sbatch` and `p10_locus_lister.sbatch` scripts, it should be noted that the columns labeled as `type`, `sdY`, and/or `s` will not be automatically incorporated into the resulting table, ***unless*** these columns are already present in the GWAS summary statistics file.
-
 In cases where users opt not to make modifications to the GWAS summary statistics, the `type`, `sdY`, and/or `s` columns needs to be manually appended to the table produced by the `p10_locus_lister.sbatch` script. This action should be carried out before running the `p11_multi_coloc.sbatch` script.
 <br>
 
-**3) LD reference**
+
+**3) LD reference**\
 LD reference from UKBB TOPMed imputed genotypes will be used.
 <br>
-
+<br>
 
 ## Quick start
 
@@ -114,7 +114,7 @@ Then run specifying the number of pan loci (1328 in this example)
 sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch --array=1-1328%100
 ```
 <br>
-
+<br>
 
 ## Options in details
 
@@ -170,6 +170,7 @@ Note this is the only essential option, if not provided the script will throw an
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
 <br>
+<br>
 
 
 ## Description of outputs
@@ -198,11 +199,13 @@ Regional Manhattan plot of colocalising traits.
 locus_15_results_summary_plot.png\
 Reporting all independent signals and traits associated at the locus, summarising the colocalising ones and placing them in the context of the chromosome (with genes annotation).
 <br>
+<br>
 
 
 ## References
  - [Giambartolomei C, Vukcevic D, Schadt EE, Franke L, Hingorani AD, Wallace C, et al. Bayesian test for colocalisation between pairs of genetic association studies using summary statistics. PLoS Genet. 2014;10(5):e1004383](https://doi.org/10.1371/journal.pgen.1004383)
  - [Yang J, Ferreira T, Morris AP et al. . Conditional and joint multiple-SNP analysis of GWAS summary statistics identifies additional variants influencing complex traits. Nat. Genet. 2012;44(4):369–375,S1–S3](doi:10.1038/ng.2213)
+<br>
 <br>
 
 
@@ -210,6 +213,7 @@ Reporting all independent signals and traits associated at the locus, summarisin
 Nicola Pirastu ([nicola.pirastu@fht.org](nicola.pirastu@fht.org))\
 Arianna Landini ([arianna.landini@external.fht.org](arianna.landini@external.fht.org))\
 Sodbo Sharapov ([sodbo.sharapov@fht.org](sodbo.sharapov@fht.org))
+<br>
 <br>
 
 
