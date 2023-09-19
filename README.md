@@ -1,8 +1,5 @@
 # Multiple traits colocalisation and fine mapping
-
- - [Giambartolomei C, Vukcevic D, Schadt EE, Franke L, Hingorani AD, Wallace C, et al. Bayesian test for colocalisation between pairs of genetic association studies using summary statistics. PLoS Genet. 2014;10(5):e1004383](https://doi.org/10.1371/journal.pgen.1004383)
- - [Yang J, Ferreira T, Morris AP et al. . Conditional and joint multiple-SNP analysis of GWAS summary statistics identifies additional variants influencing complex traits. Nat. Genet. 2012;44(4):369–375,S1–S3](doi:10.1038/ng.2213)
-
+<br>
 
 ## Description
 Performs:
@@ -15,18 +12,20 @@ Performs:
     2.1) Identification of independent association signals​ by trait\
     2.2) Leave-one-out approach to “clean” single association signal
 
-3) Colocalisation
+3) Traits colocalisation
 
 4) Finemapping of likely causal variant (for each group of colocalasing traits) using coloc posterior probability by SNP
-
+<br>
 
 ## Installation
 Clone this repository
+<br>
 
+## Required inputs
 
-## Quick start
+**1) GWAS summary statistics**
 
-**Prerequisites:** GWAS summary statistics should use identical column names, irrespective of whether the columns are in a different order or not all columns are present in every set of summary statistics. Additionally, the summary statistics must be based on the same human genome build (either 37 or 38).
+GWAS summary statistics should use identical column names, irrespective of whether the columns are in a different order or not all columns are present in every set of summary statistics. Additionally, the summary statistics must be based on the same human genome build (either 37 or 38).
 
 
 | CHROM | GENPOS | ID           | ALLELE0 | ALLELE1 | A1FREQ | N      | BETA    | SE     | LOG10P |
@@ -39,10 +38,21 @@ Clone this repository
 | 1     | 23197	 | rs1220638906 | T       | TTAAAA  | 0.9942 | 367458 | -0.038  | 0.0285 | 0.7407 |
 <br>
 
+**2) Loci table**
+
+"Guide" table reporting, for each association, the following info (using the listed column names):
+
+- chr
+- start
+- end
+- trait
+- path
+type sdY s
 
 <br>
 
 
+## Quick start
 
 To obtain trait-specific loci, provide the path where your GWAS summary statistics are located as argument to the `--path` option in the `p09_locus_breaker.sbatch`
 ```
@@ -86,7 +96,7 @@ sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch --array=1-1328%100
 
 
 
-## Usage
+## Options in details
 
 1) Identification of trait-specific loci
 
@@ -140,6 +150,10 @@ Note this is the only essential option, if not provided the script will throw an
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
 
+
+## References
+ - [Giambartolomei C, Vukcevic D, Schadt EE, Franke L, Hingorani AD, Wallace C, et al. Bayesian test for colocalisation between pairs of genetic association studies using summary statistics. PLoS Genet. 2014;10(5):e1004383](https://doi.org/10.1371/journal.pgen.1004383)
+ - [Yang J, Ferreira T, Morris AP et al. . Conditional and joint multiple-SNP analysis of GWAS summary statistics identifies additional variants influencing complex traits. Nat. Genet. 2012;44(4):369–375,S1–S3](doi:10.1038/ng.2213)
 
 
 
