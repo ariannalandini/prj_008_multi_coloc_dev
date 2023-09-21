@@ -375,7 +375,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
-        colo.res <- suppressWarnings(coloc.abf(D1,D2)) ### BETTER NOT TO SUPPRESS WARNINGS?
+        colo.res <- coloc.abf.ht(D1,D2)
 ## Save coloc summary        
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
@@ -1024,3 +1024,207 @@ final.plot <- function(locus,
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
 
+
+#################### Coloc functions modify to accept dataframes (and not only lists)
+
+
+#### coloc.abf.ht
+coloc.abf.ht <- function(dataset1, dataset2, MAF=NULL, 
+                         p1=1e-4, p2=1e-4, p12=1e-5) {
+  
+  if(!("MAF" %in% names(dataset1)) & !is.null(MAF))
+    dataset1$MAF <- MAF
+  if(!("MAF" %in% names(dataset2)) & !is.null(MAF))
+    dataset2$MAF <- MAF
+  check_dataset.ht(d=dataset1,1)
+  check_dataset.ht(d=dataset2,2)
+  
+  df1 <- process.dataset.ht(d=dataset1, suffix="df1")
+  df2 <- process.dataset.ht(d=dataset2, suffix="df2")
+  p1=adjust_prior(p1,nrow(df1),"1")
+  p2=adjust_prior(p2,nrow(df2),"2")
+  
+  merged.df <- merge(df1,df2)
+  p12=adjust_prior(p12,nrow(merged.df),"12")
+  
+  if(!nrow(merged.df))
+    stop("dataset1 and dataset2 should contain the same snps in the same order, or should contain snp names through which the common snps can be identified")
+  
+  merged.df$internal.sum.lABF <- with(merged.df, lABF.df1 + lABF.df2)
+  ## add SNP.PP.H4 - post prob that each SNP is THE causal variant for a shared signal
+  my.denom.log.abf <- logsum(merged.df$internal.sum.lABF)
+  merged.df$SNP.PP.H4 <- exp(merged.df$internal.sum.lABF - my.denom.log.abf)
+  
+  pp.abf <- combine.abf(merged.df$lABF.df1, merged.df$lABF.df2, p1, p2, p12)  
+  common.snps <- nrow(merged.df)
+  results <- c(nsnps=common.snps, pp.abf)
+  
+  output<-list(summary=results,
+               results=merged.df,
+               priors=c(p1=p1,p2=p2,p12=p12))
+  class(output) <- c("coloc_abf",class(output))
+  return(output)
+}
+
+
+#### check_dataset.ht
+check_dataset.ht <- function(d,
+                             suffix="",
+                             req=c("type","snp"),
+                             warn.minp=1e-6) {
+  if(!is.list(d) )
+    stop("dataset ",suffix,": is not a list")
+  recognised_items=c("beta","varbeta","pvalues","MAF","snp","position","N","type","s","sdY","LD")
+  nd <- intersect(names(d), recognised_items)
+  
+  ## no missing values - make people clean their own data rather
+  ## than make assumptions here for datasets I don't know
+  n <- 0
+  if(length(setdiff(req,nd)))
+    stop("dataset ",suffix,": missing required element(s) ",paste(setdiff(req,nd),collapse=", "))
+  
+  for(v in nd) {
+    if(any(is.na(d[[v]])))
+      stop("dataset ",suffix,": ",v," contains missing values")
+  }
+  
+  if (!(d$type[[1]] %in% c("quant", "cc"))) 
+    stop("dataset ", suffix, ": ", "type must be quant or cc")
+  
+  ## snps should be unique
+  if("snp" %in% nd && any(duplicated(d$snp)))
+    stop("dataset ",suffix,": duplicated snps found")
+  if("snp" %in% nd && is.factor(d$snp))
+    stop("dataset ",suffix,": snp should be a character vector but is a factor")
+  
+  ## MAF should be > 0, < 1
+  if("MAF" %in% nd && (!is.numeric(d$MAF) || any(is.na(d$MAF)) ||
+                       any(d$MAF<=0) || any(d$MAF>=1)))
+    stop("dataset ",suffix,": MAF should be a numeric, strictly >0 & <1")
+  
+  ## lengths of vector arguments should match
+  l <- -1 # impossible length
+  shouldmatch <- intersect(nd, c("pvalues","MAF","beta","varbeta","snp","position"))
+  for(v in shouldmatch)
+    if(l<0) { ## update
+      l <- length(d[[v]])
+    } else { ## check
+      if(length(d[[v]])!=l) {
+        stop("dataset ",suffix,": lengths of inputs don't match: ")
+        print(shouldmatch)
+      }
+    }
+  
+  ## type of data
+  if (! ('type' %in% nd))
+    stop("dataset ",suffix,": variable type not set")
+  if(!(d$type[[1]] %in% c("quant","cc")))
+    stop("dataset ",suffix,": ","type must be quant or cc")
+  
+  ## no beta/varbeta
+  if(("s" %in% nd) && (!is.numeric(d$s) || d$s<=0 || d$s>=1))
+    stop("dataset ",suffix,": ","s must be between 0 and 1")
+  if(!("beta" %in% nd) || !("varbeta" %in% nd)) { # need to estimate var (Y)
+    if(!("pvalues" %in% nd) || !( "MAF" %in% nd))
+      stop("dataset ",suffix,": ","require p values and MAF if beta, varbeta are unavailable")
+    if(any(d$pvalues<=0))
+      stop("pvalues should not be negative or exactly 0")
+    if(d$type=="cc" && !("s" %in% nd))
+      stop("dataset ",suffix,": ","require, s, proportion of samples who are cases, if beta, varbeta are unavailable")
+    if (!('N' %in% nd) || is.null(d$N) || any(d$N<=0) )
+      stop("dataset ",suffix,": sample size N <=0 or not set")
+    p=d$pvalues
+  } else {
+    p=pnorm( -abs( d$beta/sqrt(d$varbeta) ) ) * 2
+  }
+  
+  ## minp
+  if(min(p) > warn.minp)
+    warning("minimum p value is: ",format.pval(min(p)),"\nIf this is what you expected, this is not a problem.\nIf this is not as small as you expected, please check you supplied var(beta) and not sd(beta) for the varbeta argument. If that's not the explanation, please check the 02_data vignette.")
+  
+  ## sdY
+  if(d$type[[1]]=="quant" && !("sdY" %in% nd))
+    if(!("MAF" %in% nd && "N" %in% nd ))
+      stop("dataset ",suffix,": ","must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
+  
+  if("LD" %in% nd) {
+    if(nrow(d$LD)!=ncol(d$LD))
+      stop("LD not square")
+    if(!identical(colnames(d$LD),rownames(d$LD)))
+      stop("LD rownames != colnames")
+    if(length(setdiff(d$snp,colnames(d$LD))))
+      stop("colnames in LD do not contain all SNPs")
+  }
+  
+  ## if we reach here, no badness detected
+  NULL
+}
+
+
+
+
+#### process.dataset.ht
+process.dataset.ht <- function(d, suffix) {
+  #message('Processing dataset')
+  
+  nd <- names(d)
+  ## if (! 'type' %in% nd)
+  ##   stop("dataset ",suffix,": ",'The variable type must be set, otherwise the Bayes factors cannot be computed')
+  
+  ## if(!(d$type %in% c("quant","cc")))
+  ##     stop("dataset ",suffix,": ","type must be quant or cc")
+  
+  ## if(d$type=="cc" & "pvalues" %in% nd) {
+  ## if(!( "s" %in% nd))
+  ##     stop("dataset ",suffix,": ","please give s, proportion of samples who are cases, if using p values")
+  ## if(!("MAF" %in% nd))
+  ##     stop("dataset ",suffix,": ","please give MAF if using p values")
+  ## if(d$s<=0 || d$s>=1)
+  ##     stop("dataset ",suffix,": ","s must be between 0 and 1")
+  ## }
+  
+  ## if(d$type=="quant") {
+  ##     if(!("sdY" %in% nd || ("MAF" %in% nd && "N" %in% nd )))
+  ##         stop("dataset ",suffix,": ","must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
+  ## }
+  
+  if("beta" %in% nd && "varbeta" %in% nd) {  ## use beta/varbeta.  sdY should be estimated by now for quant
+    ## if(length(d$beta) != length(d$varbeta))
+    ##   stop("dataset ",suffix,": ","Length of the beta vectors and variance vectors must match")
+    ## if(!("snp" %in% nd))
+    ##   d$snp <- sprintf("SNP.%s",1:length(d$beta))
+    ## if(length(d$snp) != length(d$beta))
+    ##   stop("dataset ",suffix,": ","Length of snp names and beta vectors must match")
+    
+    if(d$type[[1]]=="quant" && !('sdY' %in% nd)) 
+      d$sdY <- sdY.est(d$varbeta, d$MAF, d$N)
+    df <- approx.bf.estimates(z=d$beta/sqrt(d$varbeta),
+                              V=d$varbeta, type=d$type[[1]], suffix=suffix, sdY=d$sdY)
+    df$snp <- as.character(d$snp)
+    if("position" %in% nd)
+      df <- cbind(df,position=d$position)
+    return(df)
+  }
+  
+  if("pvalues" %in% nd & "MAF" %in% nd & "N" %in% nd) { ## no beta/varbeta: use p value / MAF approximation
+    ## if (length(d$pvalues) != length(d$MAF))
+    ##   stop('Length of the P-value vectors and MAF vector must match')
+    ## if(!("snp" %in% nd))
+    ##   d$snp <- sprintf("SNP.%s",1:length(d$pvalues))
+    df <- data.frame(pvalues = d$pvalues,
+                     MAF = d$MAF,
+                     N=d$N,
+                     snp=as.character(d$snp))    
+    snp.index <- which(colnames(df)=="snp")
+    colnames(df)[-snp.index] <- paste(colnames(df)[-snp.index], suffix, sep=".")
+    ## keep <- which(df$MAF>0 & df$pvalues > 0) # all p values and MAF > 0
+    ## df <- df[keep,]
+    abf <- approx.bf.p(p=df$pvalues, f=df$MAF, type=d$type, N=df$N, s=d$s, suffix=suffix)
+    df <- cbind(df, abf)
+    if("position" %in% nd)
+      df <- cbind(df,position=d$position)
+    return(df)  
+  }
+  
+  stop("Must give, as a minimum, one of:\n(beta, varbeta, type, sdY)\n(beta, varbeta, type, MAF)\n(pvalues, MAF, N, type)")
+}
