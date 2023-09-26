@@ -18,15 +18,8 @@ Performs:
 <br>
 <br>
 
-## Setting up
-Navigate to your project folder:\
-`cd your_project_folder`
-
-Clone this repository:\
-`git clone https://gitlab.fht.org/biostatistics-unit/prj_008_multi_coloc_dev.git`
-
-Create a `logs` directory (**REQUIRED**):\
-`mkdir logs`
+## Installation
+Clone this repository
 <br>
 <br>
 
@@ -182,7 +175,7 @@ Finally, specify the number of genomic regions (identified in the previous step)
 
 ## Description of outputs
 
-**Results:**\
+**Tables:**\
 locus_15_final_locus_table.tsv\
 Reporting all independent association signals identified for each trait.
 
@@ -197,7 +190,8 @@ Reporting summary results for pairwise coloc tests performed having PPH4 > 0.9.
 locus_15_conditioned_loci.pdf\
 Visualising the assocation pattern "dissecting" process for each tested trait.
 
-locus_15_pleiotropy_table.pdf
+locus_15_pleiotropy_table.pdf\
+
 
 locus_15_colocalization_plot.pdf\
 Regional Manhattan plot of colocalising traits.
