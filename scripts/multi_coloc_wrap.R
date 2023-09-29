@@ -199,7 +199,7 @@ if(locus %in% hla_locus){
       max.loci=max(max.loci,nrow(tmp$ind.snps))
     }
   }
-## Remove eventually empty dataframes (maf filter removed all indipendent SNPs)  
+## Remove eventually empty dataframes (maf filter removed all independent SNPs)  
   conditional.datasets <- conditional.datasets %>% discard(is.null)
   
   if(length(conditional.datasets)==0){
@@ -243,7 +243,7 @@ if(locus %in% hla_locus){
           conditional.dataset2 = conditional.datasets[[pairwise.list[i,2]]],
           p.threshold.cond = 1e-6,
           p.threshold.orig = 5e-8)
-  # Check if coloc was actually performed (necessary?)         
+  # Check if coloc was actually performed        
         if(!is.null(coloc.res)){
   # Store the summary output in a data frame, adding tested traits column         
           only_summary_df <- as.data.frame(rbindlist(lapply(coloc.res, function(x) {
@@ -277,7 +277,7 @@ if(locus %in% hla_locus){
       cs_threshold=0.99 #### Set as user provided parameter?
           
   # If at least a couple of traits successfully colocalised 
-      if(nrow(final.colocs.H4)>0){
+      if(!is.null(final.colocs.H4)){
   # Create a graph from the "hit1" and "hit2" columns of the final.colocs.H4 data frame
         a.graph=graph_from_data_frame(final.colocs.H4[,c("hit1","hit2")],directed=F)
   # Identify connected components in the graph      
@@ -337,7 +337,7 @@ if(locus %in% hla_locus){
       } 
   
   ### Save ALL colocalisation summary output    
-      if(nrow(final.colocs.summary)>0){
+      if(!is.null(final.colocs.summary)){
   #      final.colocs.summary$pan.locus=locus
         colocalization.table.all=rbind(colocalization.table.all,final.colocs.summary) ### Necessary??
         write.table(colocalization.table.all,
@@ -345,7 +345,7 @@ if(locus %in% hla_locus){
           row.names=F,quote=F,sep="\t")
       }
       
-      if(nrow(final.colocs.H4)>0){
+      if(!is.null(final.colocs.H4)){
   
   ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
@@ -480,12 +480,13 @@ if(locus %in% hla_locus){
     }
     
   ### Final summary plot    
-      tryCatch({
-        final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)}, error = function(e) {
-        cat("final.plot function failed for some reason and the plot was not produced. Ask Arianna")
+      if(!is.null(final.colocs.summary)){
+        tryCatch({
+          final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)}, error = function(e) {
+          cat("final.plot function failed for some reasons and the plot was not produced. Ask Arianna")
         })
+      }
   
-      
     } else {
       final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
       final.locus.table.tmp$start=unique(locus.info$start)
