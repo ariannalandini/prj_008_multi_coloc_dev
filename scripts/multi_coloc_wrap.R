@@ -498,8 +498,11 @@ if(locus %in% hla_locus){
       final.locus.table.tmp$bJ_se=NA
       final.locus.table.tmp$pJ=NA
       final.locus.table.tmp$LD_r=NA
-      alleles=unlist(mappa.loc[mappa.loc$SNP==final.locus.table.tmp$SNP,c("A1","A2")])
-      final.locus.table.tmp$othA=alleles[!(alleles%in%final.locus.table.tmp$refA)]
+#      alleles=unlist(mappa.loc[mappa.loc$SNP %in% final.locus.table.tmp$SNP,c("A1","A2")]) ### to remove if next two lines work
+#      final.locus.table.tmp$othA=alleles[!(alleles%in%final.locus.table.tmp$refA)] ### to remove if next two lines work
+      alleles=mappa.loc[mappa.loc$SNP %in% final.locus.table.tmp$SNP,c("A1","A2")]
+      final.locus.table.tmp <- final.locus.table.tmp %>%
+        mutate(othA=ifelse(refA==alleles$A1, alleles$A2, alleles$A1))
       final.locus.table.tmp$trait=names(datasets)[1]
       final.locus.table.tmp=as.data.frame(final.locus.table.tmp)
       final.locus.table.tmp=final.locus.table.tmp[,col.order]
