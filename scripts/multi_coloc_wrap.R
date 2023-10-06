@@ -40,10 +40,12 @@ option_list <- list(
               help="Name of p-value of effect column", metavar="character"),
   make_option("--output", type="character", default="./multi_coloc", 
               help="Path and name of output directory", metavar="character"),
-  make_option("--grch", type="integer", default=38, 
+  make_option("--grch_default_ld", type="integer", default=NULL, 
               help="Genomic build of GWAS summary statistics", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character")
+  make_option("--custom_ld", type="character", default=NULL,
+              help="Path and name of custom LD and map files, followed by their grch", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -56,11 +58,37 @@ opt = parse_args(opt_parser);
 
 ## Throw error message - munged GWAS summary statistics file MUST be provided!
 if(is.null(opt$input)){
-  stop("Please specify the file name and path of your pan loci table in --input option\n",
-    call.=FALSE)
+  stop("Please specify the file name and path of your pan loci table in --input option\n", call.=FALSE)
 #  print_help(opt_parser)
 }
-  
+
+## Throw error message - default (UKBB) or custom LD and map files MUST be provided (but not both)!
+if(is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
+  stop("Please specify the default (UKBB) or custom LD and map files in either --grch_default_ld or --custom_ld option\n", call.=FALSE)
+}
+if(!is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
+  stop("Please use ONLY option among --grch_default_ld or --custom_ld option to specify either the default (UKBB) or custom LD and map files\n", call.=FALSE)
+}
+
+## Set build and LD/map files (for munging and cojo)
+if(!is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
+  grch <- opt$grch_default_ld
+  if(grch==38){
+  ## Default UKBB reference map for munging
+    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
+  ## LD reference panel (30k random unrelated british UKBB)
+    bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
+  } else if(grch==37){
+    mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
+    bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
+  }
+} else if(is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
+  ### Split list of input
+   bfile <- unlist(strsplit(opt$custom_ld, " "))[[1]]
+   mappa <- unlist(strsplit(opt$custom_ld, " "))[[2]]
+   grch <- unlist(strsplit(opt$custom_ld, " "))[[3]]
+}
+
 ## Create output folder
 system(paste0("mkdir -p ", opt$output, "/temporary"))
 system(paste0("mkdir -p ", opt$output, "/plots"))
@@ -105,11 +133,11 @@ locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 # GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
 
 # Set start and end of HLA locus 
-if(opt$grch==38){
+if(grch==38){
   hla_start=28510120
   hla_end=33480577
 }
-if(opt$grch==37){
+if(grch==37){
   hla_start=28477797
   hla_end=33448354
 }
@@ -124,23 +152,7 @@ hla_locus <- unique((
 ## Don't run for HLA loci as cojo will take forever
 if(locus %in% hla_locus){
   cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
-} else {
-
-## Define reference files for munging and cojo based on genomic build
-  if(opt$grch==38){
-    ## Reference map for munging
-    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
-    ## LD reference panel (30k random unrelated british UKBB)
-    bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
-  }
-  
-  if(opt$grch==37){
-    ## Reference map for munging
-    mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
-    ## LD reference panel (30k random unrelated british UKBB)
-    bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
-  }
-  
+} else {  
   
 ## Set up starting input  
   final.locus.table=c()  
@@ -186,7 +198,6 @@ if(locus %in% hla_locus){
 # datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
 ############################################################## 
   
-
 # Perform cojo
   conditional.datasets=list()
   max.loci=1

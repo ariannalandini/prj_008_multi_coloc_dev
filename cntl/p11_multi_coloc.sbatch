@@ -24,6 +24,7 @@ Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --effect "BETA" \
 --se "SE" \
 --pvalue "P" \
---grch 38 \
---maf 0.0001
+--grch_default_ld 38 \ ### cannot co-exists with custom_ld!!
+--maf 0.0001 \
+--custom_ld path/to/my/custom_ld/name_of_plink_file path/to/my/custom_map/name_of_map_file.txt 38 \ ### cannot co-exists with grch!!
 
