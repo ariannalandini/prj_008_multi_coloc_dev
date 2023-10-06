@@ -68,8 +68,9 @@ set.up.statics <- function(opt){
     hla_start=28477797
     hla_end=33448354
   }
-  
-  cat("\nStatic variables assigned!\n")
+    cat("\nStatic variables assigned!\n")
+  list_static <- list(grch=grch,mappa=mappa,bfile=bfile,hla_start=hla_start,hla_end=hla_end)
+  invisible(list_static)
 }
 
 
