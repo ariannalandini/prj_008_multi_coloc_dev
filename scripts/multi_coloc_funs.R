@@ -15,6 +15,66 @@
 #suppressMessages(library(dplyr))
 
 
+### check.input ###
+# Checks input provided (right format, all info necessary available etc. - TO BE EXPANDED!)
+check.input <- function(opt){
+## Throw error message - munged GWAS summary statistics file MUST be provided!
+  if(is.null(opt$input)){
+    stop("Please specify the file name and path of your pan loci table in --input option\n", call.=FALSE)
+#  print_help(opt_parser)
+  }
+## Throw error message - default (UKBB) or custom LD and map files MUST be provided (but not both)!
+  if(is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
+    stop("Please specify the default (UKBB) or custom LD and map files in either --grch_default_ld or --custom_ld option\n", call.=FALSE)
+  }
+  if(!is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
+    stop("Please use ONLY option among --grch_default_ld or --custom_ld option to specify either the default (UKBB) or custom LD and map files\n", call.=FALSE)
+  }
+  cat("\nInput check performed!\n")
+}
+
+
+### set.up.statics ###
+# Assign all static variables in a function, so they don't clutter the main code
+set.up.statics <- function(opt){
+
+## Set build and LD/map files (for munging and cojo)
+  if(!is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
+    grch <- opt$grch_default_ld
+    if(grch==38){
+  ## Default UKBB reference map for munging
+      mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
+  ## LD reference panel (30k random unrelated british UKBB)
+      bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
+    } else if(grch==37){
+      mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
+      bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
+    }
+  } else if(is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
+  ### Split list of input
+    bfile <- unlist(strsplit(opt$custom_ld, " "))[[1]]
+    mappa <- unlist(strsplit(opt$custom_ld, " "))[[2]]
+    grch <- unlist(strsplit(opt$custom_ld, " "))[[3]]
+  }
+
+## Set HLA coordinates. See:
+# GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
+# GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
+  if(grch==38){
+    hla_start=28510120
+    hla_end=33480577
+  }
+  if(grch==37){
+    hla_start=28477797
+    hla_end=33448354
+  }
+  
+  cat("\nStatic variables assigned!\n")
+}
+
+
+
+
 ### dataset.munge ###
 dataset.munge=function(sumstats.file
                         ,map=mappa.loc
