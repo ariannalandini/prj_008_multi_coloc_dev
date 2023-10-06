@@ -66,10 +66,10 @@ dataset.munge=function(sumstats.file
     }
   }
  
-#### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
+#### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only
 
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
-  dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
+# dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
 #####
   
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
@@ -125,40 +125,49 @@ dataset.munge=function(sumstats.file
   if(type=="quant" && !(is.null(sdY))){
     dataset$sdY <- sdY
   } else if(type=="quant" && is.null(sdY)){
-    dataset$sdY <- coloc:::sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
 
 # Match with locus reference map
-  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
-  dataset <- dataset[match(map$SNP,dataset$SNP),]
-  
+#  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
+#  dataset <- dataset[match(map$SNP,dataset$SNP),]
+  dataset <- dataset %>%
+    filter(
+      CHR==unique(mappa.loc$CHR),
+      BP >= min(mappa.loc$BP, na.rm=T) & BP <= max(mappa.loc$BP, na.rm=T)
+    )
+
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
   names(map)=c("rsid","chr","pos","maf","a1","a0")
 
   flip.t=snp_match(sumstats=flip,
                    info_snp=map,
-                   join_by_pos=FALSE,
+#                   join_by_pos=FALSE,
+                   join_by_pos=TRUE,
                    strand_flip=FALSE,
                    match.min.prop=0)
     
-  dataset=dataset[match(flip.t$rsid,dataset$SNP),]
+  #dataset=dataset[match(flip.t$rsid,dataset$SNP),]
+  dataset <- dataset[flip.t$`_NUM_ID_.ss`]
+  dataset$snp <- flip.t$rsid
   dataset$A1=flip.t$a1
   dataset$A2=flip.t$a0
   dataset$BETA=flip.t$beta
   
   if(type=="cc"){
     dataset <- dataset %>%
-      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","s")
+      select("snp","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","s")
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
   } else if(type=="quant"){
     dataset <- dataset %>%
-      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","sdY")
+      select("snp","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","sdY")
     names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
   }
   dataset
 }
+
 
 
 ### cojo.ht ###
