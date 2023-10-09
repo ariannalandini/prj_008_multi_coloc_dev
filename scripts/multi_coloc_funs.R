@@ -35,9 +35,9 @@ dataset.munge=function(sumstats.file
 
 # Load sumstat
   if(is.character(sumstats.file)){
-    dataset=fread(sumstats.file)
+    dataset=fread(sumstats.file, data.table=F)
   }else{
-    dataset=sumstats.file
+    dataset=as.data.frame(sumstats.file)
   }
 
   if(!is.null(a1.lab) & a1.lab%in%names(dataset) & !is.null(a0.lab) & a0.lab%in%names(dataset) ){
@@ -122,9 +122,9 @@ dataset.munge=function(sumstats.file
     stop("Please provide s, the proportion of samples who are cases")
   }
 
-  if(type=="quant" && !(is.null(sdY))){
+  if(type=="quant" && !(is.null(sdY)) && !is.na(sdY)){
     dataset$sdY <- sdY
-  } else if(type=="quant" && is.null(sdY)){
+  } else if(type=="quant" && (is.null(sdY) | is.na(sdY))){
     dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
