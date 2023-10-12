@@ -15,65 +15,99 @@
 #suppressMessages(library(dplyr))
 
 
-### check.input ###
-# Checks input provided (right format, all info necessary available etc. - TO BE EXPANDED!)
-check.input <- function(opt){
+### load_and_check_input ###
+load_and_check_input <- function(opt, locus){
 ## Throw error message - munged GWAS summary statistics file MUST be provided!
   if(is.null(opt$input)){
     stop("Please specify the file name and path of your pan loci table in --input option\n", call.=FALSE)
-#  print_help(opt_parser)
+    #  print_help(opt_parser)
+  } 
+## Load-in pan locus table
+  loci.table <- fread(opt$input)
+
+## Check that the strictly required info are present in the loci table    
+  minimal_info <- c("chr","start","end","path","trait","type")
+  if(any(minimal_info %in% names(loci.table))==FALSE){
+    stop(c("The following mandatory columns are missing from the loci table specified:\n", setdiff(minimal_info, names(loci.table))), call.=FALSE)
   }
-## Throw error message - default (UKBB) or custom LD and map files MUST be provided (but not both)!
-  if(is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
-    stop("Please specify the default (UKBB) or custom LD and map files in either --grch_default_ld or --custom_ld option\n", call.=FALSE)
+
+# If pan locus table is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name - fix this
+  if("pan_locus_name" %in% names(loci.table)){
+    # Assign pan locus start/end to trait-specific locus start/end
+    loci.table <- loci.table %>% mutate(
+      start=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\2", pan_locus_name)),
+      end=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\3", pan_locus_name))
+    )
   }
-  if(!is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
-    stop("Please use ONLY option among --grch_default_ld or --custom_ld option to specify either the default (UKBB) or custom LD and map files\n", call.=FALSE)
+# If pan locus table is NOT produced through loci identification script, it will not report the pan_locus index - add it
+  if(!("pan_locus" %in% names(loci.table))){
+    # Takes forever!  
+    #  loci.table <- loci.table %>%
+    #    arrange(chr,start,end) %>%
+    #    group_by(chr,start,end) %>%
+    #    mutate(pan_locus2=group_indices())
+    loci.table <- loci.table %>% arrange(chr,start,end) %>% group_split(chr,start,end)
+    loci.table <- lapply(loci.table, function(x) as.data.frame(x))
+    for(i in 1:length(loci.table)){
+      loci.table[[i]] <- as.data.frame(loci.table[[i]]) %>% mutate(pan_locus=i)}
+    loci.table <- as.data.frame(rbindlist(loci.table))
   }
+  
+# Define genomic region
+  loci.table.tmp <- loci.table %>% filter(pan_locus==locus)
+
+  ## Check that strictly required info are not NA
+  if(any(is.na(loci.table.tmp %>% select(all_of(minimal_info))))){
+    stop(c("NA are not allowed in the following columns:\n", minimal_info), call.=FALSE)
+  }
+  
+## Make sure genomic build (grch) info is provided
+  if(is.null(opt$grch) & is.null(loci.table.tmp$grch)){
+    stop("Please specify the genomic build either using the --grch option or adding a grch in your input loci table\n", call.=FALSE)
+  }
+  if(is.null(opt$grch) & !is.null(loci.table.tmp$grch) & any(is.na(loci.table.tmp$grch))){
+    stop("Please specify the genomic build either using the --grch option or adding a grch in your input loci table\n", call.=FALSE)
+  }
+  if(!is.null(opt$grch) & is.null(loci.table.tmp$grch)){
+    loci.table.tmp <- loci.table.tmp %>% mutate(grch=opt$grch)
+  }
+  if(!is.null(opt$grch) & !is.null(loci.table.tmp$grch) & any(is.na(loci.table.tmp$grch))){
+    loci.table.tmp <- loci.table.tmp %>% mutate(grch=ifelse(is.na(grch), opt$grch,grch))
+  }
+  if(!(unique(loci.table.tmp$grch) %in% c(37,38))){
+    stop("Sorry but we support only GRCh 37 and 38 at the moment!\n", call.=FALSE)
+  }
+    
+## If custom LD reference bfiles are not provided (either in input loci table or as argument), assign UKBB one
+  if(is.null(opt$bfile) & is.null(loci.table.tmp$bfile)){
+    print("Warning: since no custom LD reference was provided, defualt UKBB one will be used\n")
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(grch==38, 
+      "/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british",
+      "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"))
+    }
+  if(is.null(opt$bfile) & !is.null(loci.table.tmp$bfile) & any(is.na(loci.table.tmp$bfile))){
+    print("Warning: since no custom LD reference was provided for some traits, defualt UKBB one will be used for those\n")
+      loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(is.na(bfile), 
+        ifelse(grch==38, "/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british", "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"), bfile))
+  }
+  if(!is.null(opt$bfile) & is.null(loci.table.tmp$bfile)){
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=opt$bfile)
+  }
+  if(!is.null(opt$bfile) & !is.null(loci.table.tmp$bfile) & any(is.na(loci.table.tmp$bfile))){
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(is.na(bfile), opt$bfile, bfile))
+  }
+
+### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
+  loci.table.tmp <- loci.table.tmp %>% select(all_of(minimal_info), "pan_locus", "grch", "bfile", any_of(c("sdY","s"))) %>% distinct()
+  
+# Check tyoe column  
+  ### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
+  if(!(unique(loci.table.tmp$type) %in% c("cc", "quant"))){
+    stop("Type has been defined incorrectly - it has to be either 'cc' or 'quant'", call.=FALSE)
+  }
+  return(loci.table.tmp)
   cat("\nInput check performed!\n")
 }
-
-
-### set.up.statics ###
-# Assign all static variables in a function, so they don't clutter the main code
-set.up.statics <- function(opt){
-
-## Set build and LD/map files (for munging and cojo)
-  if(!is.null(opt$grch_default_ld) & is.null(opt$custom_ld)){
-    grch <- opt$grch_default_ld
-    if(grch==38){
-  ## Default UKBB reference map for munging
-      mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
-  ## LD reference panel (30k random unrelated british UKBB)
-      bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
-    } else if(grch==37){
-      mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
-      bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
-    }
-  } else if(is.null(opt$grch_default_ld) & !is.null(opt$custom_ld)){
-  ### Split list of input
-    bfile <- unlist(strsplit(opt$custom_ld, " "))[[1]]
-    mappa <- unlist(strsplit(opt$custom_ld, " "))[[2]]
-    grch <- unlist(strsplit(opt$custom_ld, " "))[[3]]
-  }
-
-## Set HLA coordinates. See:
-# GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
-# GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
-  if(grch==38){
-    hla_start=28510120
-    hla_end=33480577
-  }
-  if(grch==37){
-    hla_start=28477797
-    hla_end=33448354
-  }
-    cat("\nStatic variables assigned!\n")
-  list_static <- list(grch=grch,mappa=mappa,bfile=bfile,hla_start=hla_start,hla_end=hla_end)
-  invisible(list_static)
-}
-
-
 
 
 ### dataset.munge ###
@@ -118,15 +152,6 @@ dataset.munge=function(sumstats.file
     stop("snp.lab has not been defined or the column is missing")
   }
 
-### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
-  if(exists("type")){
-    if(type=="cc" | type=="quant"){
-      dataset <- dataset %>% mutate(type=type)
-    } else {
-    stop("Type has not been defined or has been defined incorrectly - it has to be either 'cc' or 'quant'")
-    }
-  }
- 
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only
 
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP

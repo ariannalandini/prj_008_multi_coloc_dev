@@ -40,12 +40,12 @@ option_list <- list(
               help="Name of p-value of effect column", metavar="character"),
   make_option("--output", type="character", default="./multi_coloc", 
               help="Path and name of output directory", metavar="character"),
-  make_option("--grch_default_ld", type="integer", default=NULL, 
+  make_option("--grch", type="integer", default=NULL, 
               help="Genomic build of GWAS summary statistics", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character"),
-  make_option("--custom_ld", type="character", default=NULL,
-              help="Path and name of custom LD and map files, followed by their grch", metavar="character")
+  make_option("--bfile", type="character", default=NULL,
+              help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -56,48 +56,35 @@ opt = parse_args(opt_parser);
 #opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
 ###########
 
-## Check inputs are available and correctly formatted, assign static variables
-check.input(opt)
-set.up.statics(opt)
+## Locus defined by array job
+locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+if(is.na(locus)){
+  stop("You need to use array jobs, as many as the number of your loci!\n", call.=FALSE)
+}
+
+## Read in input loci table, perform checks, format
+loci.table.tmp <- load_and_check_input(opt, locus)
+locus.info <- loci.table.tmp
 
 ## Create output folder
 system(paste0("mkdir -p ", opt$output, "/temporary"))
 system(paste0("mkdir -p ", opt$output, "/plots"))
 system(paste0("mkdir -p ", opt$output, "/results"))
+final.locus.table=c()  
+col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus")
 
-## Load-in pan locus table and sort by pan locus number
-loci.table <- fread(opt$input)
-
-# If pan locus table is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name - fix this
-if("pan_locus_name" %in% names(loci.table)){
-# Assign pan locus start/end to trait-specific locus start/end
-  loci.table <- loci.table %>% mutate(
-    start=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\2", pan_locus_name)),
-    end=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\3", pan_locus_name))
-  )
+## Set HLA coordinates. See:
+# GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
+# GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
+if(unique(loci.table.tmp$grch)==38){
+  hla_start=28510120
+  hla_end=33480577
+}
+if(unique(loci.table.tmp$grch)==37){
+  hla_start=28477797
+  hla_end=33448354
 }
 
-# If pan locus table is NOT produced through loci identification script, it will not report the pan_locus index - add it
-if(!("pan_locus" %in% names(loci.table))){
-
-# Takes forever!  
-#  loci.table <- loci.table %>%
-#    arrange(chr,start,end) %>%
-#    group_by(chr,start,end) %>%
-#    mutate(pan_locus2=group_indices())
-
-  loci.table <- loci.table %>% arrange(chr,start,end) %>% group_split(chr,start,end)
-  loci.table <- lapply(loci.table, function(x) as.data.frame(x))
-  for(i in 1:length(loci.table)){
-    loci.table[[i]] <- as.data.frame(loci.table[[i]]) %>% mutate(pan_locus=i)}
-  loci.table <- as.data.frame(rbindlist(loci.table))
-}
-
-### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
-loci.table <- loci.table %>% select(any_of(c("chr","start","end","trait","path","pan_locus","type","sdY","s"))) %>% distinct()
-
-## Locus defined by array job
-locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
 
 ## Identify loci falling in HLA region
 ##### NB: This doesn't work when the locus spans the whole extension of HLA!!!!!
@@ -106,24 +93,15 @@ hla_locus <- unique((
     filter(chr==6) %>%
     mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>%
     filter(flag==TRUE))$pan_locus)
-
+  
 ## Don't run for HLA loci as cojo will take forever
 if(locus %in% hla_locus){
-  cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
-} else {  
-  
-## Set up starting input  
-  final.locus.table=c()  
-  col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus")
-  
-# Define genomic region
-  loci.table.tmp=loci.table[loci.table$pan_locus==locus,]
-  locus.info=loci.table.tmp
-  
+    cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
+} else { 
   start=min(loci.table.tmp$start)-100000
   end=max(loci.table.tmp$end)+100000
   chr=loci.table.tmp$chr[1]
-  mappa.loc=mappa[which(mappa$CHR==chr & mappa$BP>=start & mappa$BP<=end),]
+  mappa.loc <- fread(mappa, data.table=F) %>% filter(CHR==chr, BP>=start & BP<=end)
 #  n.table=c()  ### Who uses this?
   
   cat("\nAll set and ready to start!\n")
@@ -182,6 +160,39 @@ if(locus %in% hla_locus){
   # conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.RData"))
   ##############################################################
     
+    
+
+##################################################### ON GOING
+#### Re-run locus breaker step to reduce conditioned loci extension ###
+    
+# Extract only conditioned results part of conditional datasets  
+#  data_res <- unlist(conditional.datasets, recursive=F)
+#  data_res <- data_res[grep("results", names(data_res))]
+#  data_res <- unlist(data_res, recursive=F)
+#  data_res <- lapply(data_res, function(x) x%>% mutate(pvalues=ifelse(!is.na(pC), pC, p)))
+
+#  source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
+#  test <- lapply(data_res, function(x){
+#      locus.breaker(x,
+#                p.sig=5e-08,
+#                p.limit=1e-05,
+#                hole.size=250000,
+#                p.label="pvalues",
+#                chr.label="Chr",
+#                pos.label="bp")
+#    })
+#    names(test) <- names(data_res) ### Necessary?
+
+### PROBLEM - why multiple loci found by locus.breaker AFTER cojo cond? ###
+### Cojo does not identify ALL independent SNPs?!
+### Need to match test with conditional.datasets$indsnp also!!
+
+#    for(i in 1:length(data_sub)){
+#      data_sub[[i]] <- data_sub[[i]]
+#    }
+#####################################################    
+    
+
     
   # Plot of all independent associations for each trait
     pdf(paste0(opt$output, "/plots/locus_", locus, "_conditioned_loci.pdf"), height=3.5*max.loci, width=10)
