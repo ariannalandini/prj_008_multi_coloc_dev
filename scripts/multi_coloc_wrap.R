@@ -43,7 +43,9 @@ option_list <- list(
   make_option("--grch", type="integer", default=38, 
               help="Genomic build of GWAS summary statistics", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
-              help="MAF filter", metavar="character")
+              help="MAF filter", metavar="character"),
+  make_option("--save_inter_files", type="numeric", default=FALSE, 
+              help="Whether to save intermediate datasets as R objects", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -181,11 +183,10 @@ if(locus %in% hla_locus){
   names(datasets) <- unique(loci.table.tmp$trait)
   cat("\nGWAS summary statistics succesfully munged\n")
   
-############################################################## To delete (?)
-# saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
-# datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
-############################################################## 
-  
+  if(opt$save_inter_files==TRUE){
+    saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
+#    datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
+  }  
 
 # Perform cojo
   conditional.datasets=list()
@@ -208,11 +209,10 @@ if(locus %in% hla_locus){
   
     cat("\nSecondary associations signals identified with COJO\n")
      
-  ############################################################## To delete
-  # saveRDS(conditional.datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.RData"))
-  # conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.RData"))
-  ##############################################################
-    
+    if(opt$save_inter_files==TRUE){
+      saveRDS(conditional.datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
+#      conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
+    }
     
   # Plot of all independent associations for each trait
     pdf(paste0(opt$output, "/plots/locus_", locus, "_conditioned_loci.pdf"), height=3.5*max.loci, width=10)
