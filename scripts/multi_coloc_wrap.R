@@ -9,7 +9,9 @@
 source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 ### Load necessary packages, if not available install them first
-package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2","easyGgplot2","cowplot","igraph","RColorBrewer","ggnet","patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","purrr","dplyr")
+package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2",#"easyGgplot2",
+"cowplot","igraph","RColorBrewer",#"ggnet",
+"patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","purrr","dplyr")
 for(package in package_list){
   package.loader(package)
 }
@@ -17,7 +19,7 @@ for(package in package_list){
 
 option_list <- list(
   make_option("--input", type="character", default=NULL, 
-              help="Pan loci table created by the locuslister R function", metavar="character"),
+              help="Pan loci table created by the locuslister R function or provided by user", metavar="character"),
   make_option("--chr", type="character", default="CHROM",
               help="Name of chromosome column", metavar="integer"),
   make_option("--pos", type="character", default="GENPOS", 
@@ -54,6 +56,7 @@ opt = parse_args(opt_parser);
 ########### to delete
 #opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
 #opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
+#opt$grch=38
 ###########
 
 ## Locus defined by array job
@@ -65,6 +68,7 @@ if(is.na(locus)){
 ## Read in input loci table, perform checks, format
 loci.table.tmp <- load_and_check_input(opt, locus)
 locus.info <- loci.table.tmp
+#  n.table=c()  ### Who uses this?
 
 ## Create output folder
 system(paste0("mkdir -p ", opt$output, "/temporary"))
@@ -85,14 +89,12 @@ if(unique(loci.table.tmp$grch)==37){
   hla_end=33448354
 }
 
-
 ## Identify loci falling in HLA region
 ##### NB: This doesn't work when the locus spans the whole extension of HLA!!!!!
 hla_locus <- unique((
   loci.table %>%
     filter(chr==6) %>%
-    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>%
-    filter(flag==TRUE))$pan_locus)
+    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>% filter(flag==TRUE))$pan_locus)
   
 ## Don't run for HLA loci as cojo will take forever
 if(locus %in% hla_locus){
@@ -101,9 +103,29 @@ if(locus %in% hla_locus){
   start=min(loci.table.tmp$start)-100000
   end=max(loci.table.tmp$end)+100000
   chr=loci.table.tmp$chr[1]
-  mappa.loc <- fread(mappa, data.table=F) %>% filter(CHR==chr, BP>=start & BP<=end)
-#  n.table=c()  ### Who uses this?
-  
+# Set universal mapping files (created by Edo, 1000genomes+HRC+TOPMed)
+  if(unique(loci.table.tmp$grch)==38){
+    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh38_sorted.tsv.gz"
+  }
+  if(unique(loci.table.tmp$grch)==37){
+    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh37_sorted.tsv.gz"
+  }
+  system(paste0("tabix -h ",mappa," chr",chr,":",start,"-",end," > ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
+# Load local map and format  
+  mappa.loc <- fread(paste0(opt$output, "/locus_",locus,"_mappa.loc.tsv"), data.table=F) %>%
+    select("#chromosome", contains(as.character(unique(loci.table.tmp$grch))))
+  names(mappa.loc) <- c("CHR","BP", "SNP")
+  system(paste0("rm ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
+# Format - DO WE REALLY NEED MAF?! Can we calculate it on the fly? - A bit tricky! Due to different SNP naming
+  mappa.loc <- mappa.loc %>%
+      mutate(
+        CHR=gsub("chr", "", CHR),
+        SNP=gsub("chr", "", SNP),
+        A1=gsub("\\d+:\\d+:(\\w+):(\\w+)", "\\1", SNP),
+        A2=gsub("\\d+:\\d+:(\\w+):(\\w+)", "\\2", SNP)
+      ) %>% select(SNP,CHR,BP,A1,A2)
+  mappa.loc$CHR <- as.numeric(mappa.loc$CHR)
+
   cat("\nAll set and ready to start!\n")
 
 ## Munge files

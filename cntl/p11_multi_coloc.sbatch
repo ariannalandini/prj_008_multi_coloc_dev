@@ -9,6 +9,8 @@
 
 # Loading modules
 module load R/4.1.0
+module load bcftools/1.14-python-3.9.10 ### required for tabix
+
 
 ### The --vanilla option tells Rscript to run without saving or restoring anything in the process. This keeps things nice and clean
 Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \

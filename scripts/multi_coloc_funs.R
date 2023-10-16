@@ -77,7 +77,10 @@ load_and_check_input <- function(opt, locus){
   if(!(unique(loci.table.tmp$grch) %in% c(37,38))){
     stop("Sorry but we support only GRCh 37 and 38 at the moment!\n", call.=FALSE)
   }
-    
+## NB: all traits in the same locus MUST be in the same build! Otherwise, how could you define the start and end of the locus??
+  if(length(unique(loci.table.tmp$grch))>1){
+    stop("All traits having an association in the same locus MUST have the same build!\n", call.=FALSE)
+  }
 ## If custom LD reference bfiles are not provided (either in input loci table or as argument), assign UKBB one
   if(is.null(opt$bfile) & is.null(loci.table.tmp$bfile)){
     print("Warning: since no custom LD reference was provided, defualt UKBB one will be used\n")
@@ -173,7 +176,11 @@ dataset.munge=function(sumstats.file
   if(!is.null(freq.lab) & freq.lab%in%names(dataset)){
     names(dataset)[names(dataset)==freq.lab]="FRQ"
   }else{
-    dataset$FRQ=map$MAF[match(dataset$SNP,map$SNP)]
+#    dataset$FRQ=map$MAF[match(dataset$SNP,map$SNP)]
+    stop("For the moment, frequency of effect allele MUST be provided in the GWAS summary statitics!\n", call.=FALSE)
+  
+### You should be able to calculate frequency from the bfiles provided (either default or custom). PROBLEM is that at this stage the SNP ids of GWAS and bfiles are still not matching! bfiles ones in fact should be the same of the map
+### Find a way to fix this!    
   }
   
   if("FRQ" %in% colnames(dataset)){
@@ -200,7 +207,8 @@ dataset.munge=function(sumstats.file
 # Add variance of beta  
   dataset$varbeta=dataset$SE^2
   
-# Add sdY/s
+# Add type and sdY/s
+  dataset$type <- type
   if(type=="cc" && !(is.null(s))){
     dataset$s=s
   } else if(type=="cc" && is.null(s)){
@@ -226,8 +234,9 @@ dataset.munge=function(sumstats.file
 
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
-  names(map)=c("rsid","chr","pos","maf","a1","a0")
-
+#  names(map)=c("rsid","chr","pos","maf","a1","a0")
+  names(map)=c("rsid","chr","pos","a1","a0")
+  
   flip.t=snp_match(sumstats=flip,
                    info_snp=map,
 #                   join_by_pos=FALSE,
