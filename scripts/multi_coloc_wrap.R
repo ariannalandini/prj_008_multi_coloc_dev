@@ -277,7 +277,7 @@ if(locus %in% hla_locus){
       cs_threshold=0.99 #### Set as user provided parameter?
           
   # If at least a couple of traits successfully colocalised 
-      if(!is.null(final.colocs.H4)){
+      if(nrow(final.colocs.H4)>0){
   # Create a graph from the "hit1" and "hit2" columns of the final.colocs.H4 data frame
         a.graph=graph_from_data_frame(final.colocs.H4[,c("hit1","hit2")],directed=F)
   # Identify connected components in the graph      
@@ -345,7 +345,7 @@ if(locus %in% hla_locus){
           row.names=F,quote=F,sep="\t")
       }
       
-      if(!is.null(final.colocs.H4)){
+      if(nrow(final.colocs.H4)>0){
   
   ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
