@@ -120,9 +120,8 @@ if(locus %in% hla_locus){
   mappa.loc <- mappa.loc %>%
       mutate(
         CHR=gsub("chr", "", CHR),
-        SNP=gsub("chr", "", SNP),
-        A1=gsub("\\d+:\\d+:(\\w+):(\\w+)", "\\1", SNP),
-        A2=gsub("\\d+:\\d+:(\\w+):(\\w+)", "\\2", SNP)
+        A1=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\1", SNP),
+        A2=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\2", SNP)
       ) %>% select(SNP,CHR,BP,A1,A2)
   mappa.loc$CHR <- as.numeric(mappa.loc$CHR)
 
@@ -161,7 +160,12 @@ if(locus %in% hla_locus){
   max.loci=1
   
   for(i in 1:length(datasets)){
-    tmp=cojo.ht(D=datasets[[i]], p.tresh=1e-4, maf.thresh=opt$maf, bfile=bfile)
+    tmp=cojo.ht(
+      D=datasets[[i]]
+      , p.tresh=1e-4
+      , maf.thresh=opt$maf
+      , bfile=loci.table.tmp$bfile[[i]]
+    )
     if(!is.null(tmp)){
       conditional.datasets[[i]]=tmp
       names(conditional.datasets)[i]=names(datasets)[i]

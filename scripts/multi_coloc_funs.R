@@ -177,7 +177,7 @@ dataset.munge=function(sumstats.file
     names(dataset)[names(dataset)==freq.lab]="FRQ"
   }else{
 #    dataset$FRQ=map$MAF[match(dataset$SNP,map$SNP)]
-    stop("For the moment, frequency of effect allele MUST be provided in the GWAS summary statitics!\n", call.=FALSE)
+    stop("For the moment, frequency of effect allele MUST be provided in the GWAS summary statistics!\n", call.=FALSE)
   
 ### You should be able to calculate frequency from the bfiles provided (either default or custom). PROBLEM is that at this stage the SNP ids of GWAS and bfiles are still not matching! bfiles ones in fact should be the same of the map
 ### Find a way to fix this!    
@@ -209,21 +209,20 @@ dataset.munge=function(sumstats.file
   
 # Add type and sdY/s
   dataset$type <- type
-  if(type=="cc" && !(is.null(s))){
+  if(type=="cc" & !(is.null(s))){
     dataset$s=s
   } else if(type=="cc" && is.null(s)){
     #### Is this correct?? Is "s" strictly necessary for cc traits??
     stop("Please provide s, the proportion of samples who are cases")
   }
 
-  if(type=="quant" && !(is.null(sdY))){
+  if(type=="quant" & !(is.null(sdY))){
     dataset$sdY <- sdY
-  } else if(type=="quant" && is.null(sdY)){
-    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+  } else if(type=="quant" & is.null(sdY)){
+    dataset$sdY <- coloc:::sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
-
-# Match with locus reference map
+## Match with locus reference map
 #  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
 #  dataset <- dataset[match(map$SNP,dataset$SNP),]
   dataset <- dataset %>%
@@ -234,7 +233,7 @@ dataset.munge=function(sumstats.file
 
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
-#  names(map)=c("rsid","chr","pos","maf","a1","a0")
+#  names(map)=c("rsid","chr","pos","maf","a1","a0") ### Do we really need to provid MAF?!
   names(map)=c("rsid","chr","pos","a1","a0")
   
   flip.t=snp_match(sumstats=flip,
@@ -246,19 +245,21 @@ dataset.munge=function(sumstats.file
     
   #dataset=dataset[match(flip.t$rsid,dataset$SNP),]
   dataset <- dataset[flip.t$`_NUM_ID_.ss`]
-  dataset$snp <- flip.t$rsid
+
+# Keep both original and map SNP id
+  dataset$snp_map <- flip.t$rsid
   dataset$A1=flip.t$a1
   dataset$A2=flip.t$a0
-  dataset$BETA=flip.t$beta
-  
+  dataset$b=flip.t$beta
+
   if(type=="cc"){
     dataset <- dataset %>%
-      select("snp","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","s")
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
+      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","s") %>%
+      rename(se=SE, p=P)
   } else if(type=="quant"){
     dataset <- dataset %>%
-      select("snp","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","sdY")
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
+      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","sdY") %>%
+      rename(se=SE, p=P)
   }
   dataset
 }
@@ -266,7 +267,7 @@ dataset.munge=function(sumstats.file
 
 
 ### cojo.ht ###
-### Performs --cojo-slct first to identify all indipendent SNPs and --cojo-cond then to condition upon identified SNPs
+### Performs --cojo-slct first to identify all independent SNPs and --cojo-cond then to condition upon identified SNPs
 cojo.ht=function(D=datasets[[1]]
                  ,plink.bin="/project/alfredo/software/plink/1.90_20210606/plink"
                  ,gcta.bin="/project/alfredo/software/GCTA/1.94.0beta/gcta64"
@@ -276,20 +277,16 @@ cojo.ht=function(D=datasets[[1]]
   
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
-  write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
+  write(D$SNP,ncol=1,file=paste0(random.number,".snp.list"))
   system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --freqx --out ",random.number))
   
   freqs=fread(paste0(random.number,".frqx"))
-  freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")])))
-  D$FREQ=freqs$FreqA1[match(D$snp,freqs$SNP)]
-  idx=which(D$a1!=freqs$A1)
-  D$FREQ[idx]=1-D$FREQ[idx]
-  D$se=sqrt(D$varbeta)
-
-  D <- D %>%
-    select("snp","a1","a0","FREQ","beta","se","pvalues","N","type", any_of(c("sdY","s"))) %>%
-    rename("SNP"="snp","A1"="a1","A2"="a0","freq"="FREQ","b"="beta","p"="pvalues")
-  
+  freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")]))) #### Why doing all this when plink can directly calculate it with --frq?
+  D$freq=freqs$FreqA1[match(D$SNP,freqs$SNP)]
+  idx=which(D$A1!=freqs$A1)
+  D$freq[idx]=1-D$freq[idx]
+#  D$se=sqrt(D$varbeta) # why not keeping se from the munging? se is anyway required to calculate varbeta
+  D <- D %>% select("SNP","A1","A2","freq","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
 
 # step1 determine independent snps
@@ -324,15 +321,9 @@ cojo.ht=function(D=datasets[[1]]
       
 ############
 
-# Re-add type and sdY/s info
-        type <- unique(D$type)
-        if(type=="quant"){
-          step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-          mutate(type=type, sdY=unique(D$sdY))
-        } else if(type=="cc"){
-          step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-          mutate(type=type, s=unique(D$s))
-        }
+# Re-add type and sdY/s info, and map SNPs!
+        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+          left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
         dataset.list$results[[i]]=step2.res
         names(dataset.list$results)[i]=ind.snp$SNP[i]
       }
@@ -352,7 +343,7 @@ cojo.ht=function(D=datasets[[1]]
 
     step2.res <- cbind(
       step2.res,
-      D %>% select(type, any_of(c("sdY", "s"))) %>% slice_sample(n=nrow(step2.res))
+      D %>% select(snp_map,type,any_of(c("sdY", "s"))) %>% slice_sample(n=nrow(step2.res))
     )
     
     dataset.list$results[[1]]=step2.res
