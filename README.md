@@ -224,17 +224,25 @@ Sodbo Sharapov ([sodbo.sharapov@fht.org](sodbo.sharapov@fht.org))
 
 
 ## To do
+
+General:
 - Create conda environment for R packages needed
+
+Locus identification:
 - Add more possible file extension to the GWAS format in `p09_locus_breaker.sbatch`\
-- Possibility to provide costume LD reference (?)\
-- ~~Patch `coloc.abf()` function to account for sample overlap~~ No need according to Sodbo's simulations
-- Check munging function to set "essential" info and "optional" info (code will run anyway if only esential info are provided)
 - ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
-- ~~Slim down output files? --> Implement new p-value filter discussed at last meeting~~ DONE
+
+Coloc (ideally in priority order?):
+- Possibility to provide costume LD reference - **ON GOING**\
+- Add cojo raw --> check if this solves issue with traits "bridging" colocasation between traits clearly not colocalisaing, creating a fake colocalisaing sub locus
+- Check for missing SNPs across different population GWAS - if they do not interset in the cs beacuse they're not at ALL in some datasets, they should NOT be removed from the cs intersection
+- Write from scratches cojo joint (coloc --cond is NOT a joint model)
+- Check munging function to set "essential" info and "optional" info (code will run anyway if only essential info are provided)
 - What about COJO collinearity? --> Use tryCatch()
-- Include possibility to perform coloc on a specified custom region (skipping locus.breaker and locus.lister steps)
-- Include TileDB format as input --> check https://dirk.eddelbuettel.com/papers/useR2021_tiledb_tutorial.pdf --> Linda is taking care of this
-- Include example data to test the pipeline?
 - Improve naming consistency:
     1) pan.locus and sub_locus --> either use "." or "_"
     2) sub loci are somentimes called "sub_locus" and sometimes "g1"
+- Include example data to test the pipeline?
+- ~~Patch `coloc.abf()` function to account for sample overlap~~ No need according to Sodbo's simulations
+- ~~Slim down output files? --> Implement new p-value filter~~ DONE
+- ~~Include possibility to perform coloc on a specified custom region (skipping locus.breaker and locus.lister steps)~~ DONE - possible to skip p09 and p10 steps and provide costum loci table
