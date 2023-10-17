@@ -483,7 +483,7 @@ if(locus %in% hla_locus){
       if(!is.null(final.colocs.summary)){
         tryCatch({
           final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)}, error = function(e) {
-          cat("final.plot function failed for some reasons and the plot was not produced. Ask Arianna")
+          cat("final.plot function failed for some reasons and the plot was not produced. Ask Arianna\n")
           print(e)
         })
       }
