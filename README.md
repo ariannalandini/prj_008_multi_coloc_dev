@@ -226,17 +226,21 @@ Sodbo Sharapov ([sodbo.sharapov@fht.org](sodbo.sharapov@fht.org))
 ## To do
 
 General:
-- Create conda environment for R packages needed
+- Create conda environment for R packages needed (easyGgplot2 and ggnet are the only packages not supported in conda. easyGgplot2 really needed? May ggnet be replaced by ggnetwork?)
 
 Locus identification:
 - Add more possible file extension to the GWAS format in `p09_locus_breaker.sbatch`\
 - ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
 
 Coloc (ideally in priority order?):
-- Possibility to provide costume LD reference - **ON GOING**\
+- Possibility to provide costume LD reference - **ON GOING**
 - Add cojo raw --> check if this solves issue with traits "bridging" colocasation between traits clearly not colocalisaing, creating a fake colocalisaing sub locus
 - Check for missing SNPs across different population GWAS - if they do not interset in the cs beacuse they're not at ALL in some datasets, they should NOT be removed from the cs intersection
 - Write from scratches cojo joint (coloc --cond is NOT a joint model)
+
+- Include effect allele frequency in the final summary plot (next to SNP label)
+- Add legend/scale of effect size in the final summary plot
+- Cluster/rank traits by correlation in the final summary plot
 - Check munging function to set "essential" info and "optional" info (code will run anyway if only essential info are provided)
 - What about COJO collinearity? --> Use tryCatch()
 - Improve naming consistency:
