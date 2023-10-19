@@ -311,7 +311,9 @@ if(locus %in% hla_locus){
         pleio.all=reshape2::dcast(pleio.all,formula = SNP+sublocus+trait~variable,fill=NA)
         pleio.all=pleio.all[order(pleio.all$sublocus), ]
         pleio.all$Z=pleio.all$b/pleio.all$se
-          
+        pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
+
+##### Raw Z-scores           
         a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
         row.names(a)=a$SNP
                 
@@ -325,6 +327,22 @@ if(locus %in% hla_locus){
           col=COL2('RdBu', 200),
           col.lim=c(max(abs(a[,-1]))*-1,max(abs(a[,-1]))))
         dev.off()
+
+##### Scaled Z-scores
+        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
+        row.names(a2)=a2$SNP
+
+        pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
+          width=ifelse((dim(a2)[1]/dim(a2)[2])*7>4, (dim(a2)[1]/dim(a2)[2])*7, 4)
+        )
+        corrplot(t(as.matrix(a2[,-1])),
+          is.corr = F,
+          method = "color",
+          addgrid.col = 'darkgrey',
+          col=COL2('RdBu', 200),
+          col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
+        dev.off()
+
   
      
   ### Plot coloc
