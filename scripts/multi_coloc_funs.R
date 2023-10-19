@@ -293,7 +293,9 @@ cojo.ht=function(D=datasets[[1]]
   system(paste0(gcta.bin," --bfile ", random.number, " --cojo-p ", p.tresh, " --maf ", maf.thresh, " --extract ", random.number, ".snp.list --cojo-file ", random.number, "_sum.txt --cojo-slct --out ", random.number, "_step1"))
   
   if(file.exists(paste0(random.number,"_step1.jma.cojo"))){
-    ind.snp=fread(paste0(random.number,"_step1.jma.cojo"))
+    
+    ind.snp=fread(paste0(random.number,"_step1.jma.cojo")) %>%
+      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
     dataset.list=list()
     dataset.list$ind.snps=ind.snp
     dataset.list$results=list()
@@ -325,7 +327,7 @@ cojo.ht=function(D=datasets[[1]]
         step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
           left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
         dataset.list$results[[i]]=step2.res
-        names(dataset.list$results)[i]=ind.snp$SNP[i]
+        names(dataset.list$results)[i]=ind.snp$snp_map[i]
       }
     
     } else {
@@ -333,21 +335,17 @@ cojo.ht=function(D=datasets[[1]]
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
-    step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE)
+    step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 
 #### Add back top SNP, removed from the data frame with the conditioning step
-    step2.res <- rbind.fill(ind.snp %>% select(-bJ,-bJ_se,-pJ,-LD_r), step2.res)
+    step2.res <- rbind.fill(step2.res, ind.snp %>% select(-bJ,-bJ_se,-pJ,-LD_r))
     step2.res$bC <- NA
     step2.res$bC_se <- NA
     step2.res$pC <- NA
 
-    step2.res <- cbind(
-      step2.res,
-      D %>% select(snp_map,type,any_of(c("sdY", "s"))) %>% slice_sample(n=nrow(step2.res))
-    )
-    
     dataset.list$results[[1]]=step2.res
-    names(dataset.list$results)[1]=ind.snp$SNP[1]
+    names(dataset.list$results)[1]=ind.snp$snp_map[1]
     }
   }
   system(paste0("rm *",random.number,"*"))
@@ -366,14 +364,15 @@ plot.cojo.ht=function(cojo.ht.obj){
     for(i in 1:nrow(cojo.ht.obj$ind.snps)){
       
       tmp=cojo.ht.obj$results[[i]]
-      tmp$signal=cojo.ht.obj$ind.snps$SNP[i]
+      tmp$signal=cojo.ht.obj$ind.snps$snp_map[i]
       whole.dataset=rbind(whole.dataset,tmp)
     }
     
     p1 <- ggplot(cojo.ht.obj$results[[i]], aes(x=bp,y=-log10(p))) +
       geom_point(alpha=0.6,size=3)+
       theme_minimal()+
-      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=SNP),size=6,shape=23)
+      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=snp_map),size=6,shape=23) +
+      guides(fill=guide_legend(title="SNP"))
     
     p2 <- ggplot(whole.dataset,aes(x=bp,y=-log10(pC),color=signal)) +
       facet_grid(signal~.) +
@@ -383,12 +382,12 @@ plot.cojo.ht=function(cojo.ht.obj){
     
     p3 <- p1/p2 + plot_layout(heights = c(1, nrow(cojo.ht.obj$ind.snps)+0.2))
     
-  }else{
+  } else {
     
     p3 <- ggplot(cojo.ht.obj$results[[1]], aes(x=bp,y=-log10(p))) +
       geom_point(alpha=0.6,size=3)+
       theme_minimal()+
-      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=SNP),size=6,shape=23)
+      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=snp_map),size=6,shape=23)
   }
   (p3)
 }
@@ -411,7 +410,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp){
       )
     ### Add other allele from map    
     for(n in 1:nrow(tmp)){
-      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$SNP[n],c("A1","A2")])
+      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$snp_map[n],c("A1","A2")])
       tmp$othA[n]=alleles[!(alleles%in%tmp$refA[n])]
     }
     tmp
@@ -428,16 +427,16 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
   
   if(length(grep("pJ",names(conditional.dataset1$ind.snps)))>0){
     
-    hits.t1=conditional.dataset1$ind.snps$SNP[conditional.dataset1$ind.snps$pJ<p.threshold.cond | conditional.dataset1$ind.snps$p <p.threshold.orig]
+    hits.t1=conditional.dataset1$ind.snps$snp_map[conditional.dataset1$ind.snps$pJ<p.threshold.cond | conditional.dataset1$ind.snps$p <p.threshold.orig]
   }else{
-    hits.t1=conditional.dataset1$ind.snps$SNP
+    hits.t1=conditional.dataset1$ind.snps$snp_map
   }
   
   if(length(grep("pJ",names(conditional.dataset2$ind.snps)))>0){
     
-    hits.t2=conditional.dataset2$ind.snps$SNP[conditional.dataset2$ind.snps$pJ<p.threshold.cond | conditional.dataset2$ind.snps$p<p.threshold.orig]
+    hits.t2=conditional.dataset2$ind.snps$snp_map[conditional.dataset2$ind.snps$pJ<p.threshold.cond | conditional.dataset2$ind.snps$p<p.threshold.orig]
   }else{
-    hits.t2=conditional.dataset2$ind.snps$SNP
+    hits.t2=conditional.dataset2$ind.snps$hits.t2
   }
   
   if(length(hits.t2)>0 & length(hits.t1)>0){
@@ -449,26 +448,26 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D1=conditional.dataset1$results[[i]]     
         D2=conditional.dataset2$results[[j]] 
         
-        if(length(grep("bC", names(D1)))>0){
+        if(any(!is.na(D1$bC))){
           D1 <- D1 %>%
-            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
-        }else{
+            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
+        } else {
           D1 <- D1 %>%
-            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D1$varbeta=D1$varbeta^2
         D1=na.omit(D1)
         
-        if(length(grep("bC", names(D2)))>0){
+        if(any(!is.na(D2$bC))){
           D2 <- D2 %>%
-            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
+            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
         }else{
           D2 <- D2 %>%
-            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
@@ -478,7 +477,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
         colo.sum$hit2=j
-#        coloc.summary=rbind(coloc.summary,colo.sum)
+#       coloc.summary=rbind(coloc.summary,colo.sum)
 
 ## Save coloc result by SNP
         colo.full_res <- colo.res$results %>% 
@@ -497,17 +496,17 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
 
 
 ### coloc.subgrouping 
-coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp){
+coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp, col.order){
   # Add sublocus to locus table
   for(k in 1:nrow(final.colocs.H4)){
     
     final.locus.table.tmp$sub_locus[
       final.locus.table.tmp$trait==final.colocs.H4$t1[k] &
-        final.locus.table.tmp$SNP==final.colocs.H4$hit1[k]]=final.colocs.H4$g1[k]
+        final.locus.table.tmp$snp_map==final.colocs.H4$hit1[k]]=final.colocs.H4$g1[k]
     
     final.locus.table.tmp$sub_locus[
       final.locus.table.tmp$trait==final.colocs.H4$t2[k] &
-        final.locus.table.tmp$SNP==final.colocs.H4$hit2[k]]=final.colocs.H4$g1[k]
+        final.locus.table.tmp$snp_map==final.colocs.H4$hit2[k]]=final.colocs.H4$g1[k]
   }
   
   # Add sublocus also for non-colocalising loci
@@ -517,6 +516,7 @@ coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp){
     final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
   }
   
+  final.locus.table.tmp <- final.locus.table.tmp %>% rename(snp_original=SNP, SNP=snp_map)
   final.locus.table.tmp=as.data.frame(final.locus.table.tmp)[,col.order]
   return(final.locus.table.tmp)
 } 
@@ -536,13 +536,10 @@ coloc.plot <- function(x, outpath=NULL){
       tmp$label=paste(x$t1[i],x$hit1[i],sep="-")
       tmp$group=x$g1[i]
       
-      if(length(grep("pC",names(tmp)))>0){
-        
+      if(any(!is.na(tmp$pC))){
         tmp=tmp[,c("bp","pC","label","group")]
         names(tmp)=c("bp","p","label","group")
-        
       } else {
-        
         tmp=tmp[,c("bp","p","label","group")]
       }  
       
@@ -551,8 +548,7 @@ coloc.plot <- function(x, outpath=NULL){
       tmp$label=paste(x$t2[i],x$hit2[i],sep="-")
       tmp$group=x$g1[i]
       
-      if(length(grep("pC",names(tmp)))>0){
-        
+      if(any(!is.na(tmp$pC))){
         tmp=tmp[,c("bp","pC","label","group")]
         names(tmp)=c("bp","p","label","group")
       } else {
@@ -562,7 +558,6 @@ coloc.plot <- function(x, outpath=NULL){
       per.plot.data=rbind(per.plot.data,tmp)
       per.plot.data=per.plot.data[order(per.plot.data$group),]
       per.plot.data$label=factor(per.plot.data$label,levels=unique(per.plot.data$label))
-      
       x$locus=locus
     }
     
@@ -665,8 +660,7 @@ bin2lin2=function (D, dotplot = FALSE){
 
 pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot=FALSE,plot.file=NULL, index.trait=NULL){
   
-  
-  ## Remove duplicates
+## Remove duplicates
   duplicati=table(loc.table$trait)
   if(any(duplicati>1)){
     doppi=names(duplicati)[duplicati>1]
@@ -676,55 +670,45 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
       min.snp=tmp$SNP[which.min(tmp$pJ)]
       loc.table=loc.table[which(loc.table$trait!=i | (loc.table$trait==i & loc.table$SNP==min.snp)),]
     }
-    
   }
-  
   
   if(nrow(loc.table)>1){
     for(i in 1:nrow(loc.table)){
       
       if(i==1){
         merged.datasets=conditional.datasets[[loc.table$trait[i]]]$results[[loc.table$SNP[i]]]
-        if("bC"%in% names(merged.datasets)){
-          
-          merged.datasets=merged.datasets[,c("SNP","bC","bC_se","pC")]
-          names(merged.datasets)=c("SNP",paste(c("beta","se","pval"),loc.table$trait[i],sep=".."))
-        }else{
-          
-          merged.datasets=merged.datasets[,c("SNP","b","se","p")]
-          names(merged.datasets)=c("SNP",paste(c("beta","se","pval"),loc.table$trait[i],sep=".."))
-          
-          
+        
+        if(any(!is.na(merged.datasets$bC))){
+          merged.datasets=merged.datasets[,c("snp_map","bC","bC_se","pC","n")]
+          names(merged.datasets)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
+        } else {
+          merged.datasets=merged.datasets[,c("snp_map","b","se","p","n")]
+          names(merged.datasets)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
         }
         
-        
-      }else{
+      } else {
         
         merged.datasets2=conditional.datasets[[loc.table$trait[i]]]$results[[loc.table$SNP[i]]]
-        if("bC"%in% names(merged.datasets2)){
-          
-          merged.datasets2=merged.datasets2[,c("SNP","bC","bC_se","pC")]
-          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval"),loc.table$trait[i],sep=".."))
-        }else{
-          
-          merged.datasets2=merged.datasets2[,c("SNP","b","se","p")]
-          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval"),loc.table$trait[i],sep=".."))
-          
-          
+        
+        if(any(!is.na(merged.datasets2$bC))){
+          merged.datasets2=merged.datasets2[,c("snp_map","bC","bC_se","pC","n")]
+          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","N"),loc.table$trait[i],sep=".."))
+        } else {
+          merged.datasets2=merged.datasets2[,c("snp_map","b","se","p","n")]
+          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
         }
+        
         merged.datasets=merge(merged.datasets,merged.datasets2,by="SNP",all = FALSE,suffixes =c(""))
         
       }
-      
     }
     
     merged.datasets=na.omit(merged.datasets)
     if(is.null(index.trait)){
-      
       top.snp=as.data.frame(merged.datasets[which.min(apply(merged.datasets[,grep("pval..",names(merged.datasets))],1,min)),])
-    }else if (length(grep(index.trait,names(merged.datasets)))==0){
+    } else if (length(grep(index.trait,names(merged.datasets)))==0){
       top.snp=as.data.frame(merged.datasets[which.min(apply(merged.datasets[,grep("pval..",names(merged.datasets))],1,min)),])
-    }else{
+    } else {
       top.snp=as.data.frame(merged.datasets[which.min(merged.datasets[,paste0("pval..",index.trait)]),])
     }
     
@@ -733,6 +717,7 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
     
     top.snp$variable=matric[,1]
     top.snp$trait=matric[,2]
+    
     if(plot==TRUE){
      
       mappa=conditional.datasets[[1]]$results[[1]][,c("SNP","bp")]
@@ -751,20 +736,19 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
       dev.off()
     }
     
-  }else{
+  } else {
     
     merged.datasets=conditional.datasets[[loc.table$trait[1]]]$results[[loc.table$SNP[1]]]
-    if("bC"%in% names(merged.datasets)){
-      
-      merged.datasets=merged.datasets[,c("SNP","bC","bC_se","pC")]
-      names(merged.datasets)=c("SNP","beta","se","pval")
-    }else{
-      
-      merged.datasets=merged.datasets[,c("SNP","b","se","p")]
-      names(merged.datasets)=c("SNP","beta","se","pval")
+    
+    if(any(!is.na(merged.datasets$bC))){
+      merged.datasets=merged.datasets[,c("snp_map","bC","bC_se","pC","n")]
+      names(merged.datasets)=c("SNP","beta","se","pval","n")
+    } else {
+      merged.datasets=merged.datasets[,c("snp_map","b","se","p","n")]
+      names(merged.datasets)=c("SNP","beta","se","pval","n")
     }
     top.snp=merged.datasets[which.min(merged.datasets$p),]
-    names(top.snp)=c("SNP",paste(c("beta","se","pval"),loc.table$trait[1],sep=".."))
+    names(top.snp)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[1],sep=".."))
     top.snp=reshape2::melt(top.snp)
     matric=matrix(unlist(strsplit(as.character(top.snp$variable),split="\\.\\.")),ncol=2,byrow = T)
     top.snp$variable=matric[,1]
@@ -1122,7 +1106,7 @@ coloc.abf.ht <- function(dataset1, dataset2, MAF=NULL,
   my.denom.log.abf <- coloc:::logsum(merged.df$internal.sum.lABF)
   merged.df$SNP.PP.H4 <- exp(merged.df$internal.sum.lABF - my.denom.log.abf)
   
-  pp.abf <- combine.abf(merged.df$lABF.df1, merged.df$lABF.df2, p1, p2, p12)  
+  pp.abf <- coloc:::combine.abf(merged.df$lABF.df1, merged.df$lABF.df2, p1, p2, p12)  
   common.snps <- nrow(merged.df)
   results <- c(nsnps=common.snps, pp.abf)
   

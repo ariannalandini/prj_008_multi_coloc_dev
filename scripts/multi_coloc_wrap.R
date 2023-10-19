@@ -75,7 +75,7 @@ system(paste0("mkdir -p ", opt$output, "/temporary"))
 system(paste0("mkdir -p ", opt$output, "/plots"))
 system(paste0("mkdir -p ", opt$output, "/results"))
 final.locus.table=c()  
-col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus")
+col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus","snp_original")
 
 ## Set HLA coordinates. See:
 # GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
@@ -307,8 +307,10 @@ if(locus %in% hla_locus){
         sub.loci=sort(unique(final.locus.table.tmp$sub_locus))
         
         for(i in sub.loci){
-            tmp=pleio.table(conditional.datasets = conditional.datasets,
-                            loc.table = final.locus.table.tmp[final.locus.table.tmp$sub_locus==i,])
+            tmp=pleio.table(
+              conditional.datasets = conditional.datasets,
+              loc.table = final.locus.table.tmp[final.locus.table.tmp$sub_locus==i,]
+            )
             tmp$sublocus=i
             pleio.all=rbind(pleio.all,tmp)
         }
@@ -317,7 +319,9 @@ if(locus %in% hla_locus){
         pleio.all=reshape2::dcast(pleio.all,formula = SNP+sublocus+trait~variable,fill=NA)
         pleio.all=pleio.all[order(pleio.all$sublocus), ]
         pleio.all$Z=pleio.all$b/pleio.all$se
-          
+        pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
+        
+##### Raw Z-scores        
         a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
         row.names(a)=a$SNP
                 
@@ -331,11 +335,26 @@ if(locus %in% hla_locus){
           col=COL2('RdBu', 200),
           col.lim=c(max(abs(a[,-1]))*-1,max(abs(a[,-1]))))
         dev.off()
+
+##### Scaled Z-scores
+        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
+        row.names(a2)=a2$SNP
+
+        pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
+          width=ifelse((dim(a2)[1]/dim(a2)[2])*7>4, (dim(a2)[1]/dim(a2)[2])*7, 4)
+        )
+        corrplot(t(as.matrix(a2[,-1])),
+          is.corr = F,
+          method = "color",
+          addgrid.col = 'darkgrey',
+          col=COL2('RdBu', 200),
+          col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
+        dev.off()
   
      
   ### Plot coloc
         coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
-      }else{
+      } else {
         idx=which(is.na(final.locus.table.tmp$sub_locus))
         pri=1
         final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
@@ -356,11 +375,17 @@ if(locus %in% hla_locus){
   ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
         colocalization.table.H4 <- final.colocs.H4 %>%
-          inner_join(final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag),
+          inner_join(
+            final.locus.table.tmp %>%
+              select(SNP, trait, sub_locus, flag,snp_original)%>%
+              rename(hit1_original=snp_original),
           by=c("t1"="trait", "hit1"="SNP", "g1"="sub_locus")
           , multiple = "all"
         ) %>%
-        inner_join(final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag),
+        inner_join(
+          final.locus.table.tmp %>%
+            select(SNP, trait, sub_locus, flag, snp_original) %>%
+            rename(hit2_original=snp_original),
           by=c("t2"="trait", "hit2"="SNP", "g1"="sub_locus")
           ,multiple = "all"
         ) 
