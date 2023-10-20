@@ -230,7 +230,7 @@ if(locus %in% hla_locus){
   # Identify all pairwise combination of traits to test
       pairwise.list=t(combn(names(conditional.datasets),2))
   # Prepare final locus.table for coloc
-      final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp)
+      final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp,mappa.loc)
   
   ### Run colocalisation and store results
       final.colocs.summary=c()
@@ -312,9 +312,21 @@ if(locus %in% hla_locus){
         pleio.all=pleio.all[order(pleio.all$sublocus), ]
         pleio.all$Z=pleio.all$b/pleio.all$se
         pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
+        
+        pleio.all <- as.data.frame(pleio.all %>%
+          group_by(SNP,trait) %>%
+          mutate(Z=mean(Z), Z_scaled=mean(Z_scaled)) %>%
+          ungroup() %>%
+          distinct(SNP,trait,Z,Z_scaled)
+        )
+          
 
 ##### Raw Z-scores           
-        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
+#        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
+### aggregate function missing, defaulting to ‘length’ - This error occurs when more than one value could be placed in the individual cells of the wide data frame. Mean Z-scores is thus taken for each SNP-trait combo (beta values varies, why?!)     
+
+        a <- pleio.all %>% select(-Z_scaled) %>% spread(trait, Z)
+        a[is.na(a)] <- 0
         row.names(a)=a$SNP
                 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table.pdf"),
@@ -329,7 +341,8 @@ if(locus %in% hla_locus){
         dev.off()
 
 ##### Scaled Z-scores
-        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
+        a2 <- pleio.all %>% select(-Z) %>% spread(trait, Z_scaled)
+        a2[is.na(a2)] <- 0
         row.names(a2)=a2$SNP
 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
@@ -343,8 +356,6 @@ if(locus %in% hla_locus){
           col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
         dev.off()
 
-  
-     
   ### Plot coloc
         coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
       }else{

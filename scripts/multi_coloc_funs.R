@@ -124,7 +124,7 @@ dataset.munge=function(sumstats.file
 
   if(type=="quant" && !(is.null(sdY)) && !is.na(sdY)){
     dataset$sdY <- sdY
-  } else if(type=="quant" && (is.null(sdY) | is.na(sdY))){
+  } else if(type=="quant" && (is.null(sdY) | is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
     dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
@@ -293,11 +293,11 @@ plot.cojo.ht=function(cojo.ht.obj){
 
 
 ### coloc.prep.table
-coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp){
+coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,mappa.loc){
   ### Select only 1) genome-wide significant or 2) with conditioned p-value < 1e-6 SNPs
   final.locus.table.tmp <- as.data.frame(rbindlist(lapply(names(conditional.datasets), function(x){
     tmp <- conditional.datasets[[x]]$ind.snps
-    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)}
+#    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)} # BUT WHT?! Anyway filtering later and here is fucking up everything
     tmp <- tmp %>%
       mutate(
         start=unique(loci.table.tmp$start),
@@ -309,7 +309,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp){
       )
     ### Add other allele from map    
     for(n in 1:nrow(tmp)){
-      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$SNP[n],c("A1","A2")])
+      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$SNP[n],c("A1","A2")]) ### NO MATCH! BECAUSE MAP SNPS AND GWAS SNPS ARE NOT MATCHING!
       tmp$othA[n]=alleles[!(alleles%in%tmp$refA[n])]
     }
     tmp
