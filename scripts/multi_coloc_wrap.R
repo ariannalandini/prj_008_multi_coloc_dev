@@ -558,7 +558,11 @@ if(locus %in% hla_locus){
     
     final.locus.table <- as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) 
     if("flag" %in% names(final.locus.table)){
-      final.locus.table <- final.locus.table %>% select(-flag) }
+      final.locus.table <- final.locus.table %>%
+        mutate(flag=ifelse(flag=="keep", TRUE, FALSE)) %>% 
+        rename(tested_by_coloc=flag) %>%
+        arrange(sub_locus)
+      }
     
     if(exists("colocalization.table.H4")){
       final.locus.table <- final.locus.table %>% left_join(rbind(
