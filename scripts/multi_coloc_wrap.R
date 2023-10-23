@@ -412,12 +412,30 @@ if(locus %in% hla_locus){
             mutate(cojo_hit=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
             select(-hit1,-hit2,-t1,-t2)
         })
-  
+
+        
+##### NEW BIT - Extract SNPs tested in ALL traits for that colocalising group
+        snp_list <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
+        snp_list <- setNames(snp_list, sapply(snp_list, function(x){ paste0("s", unique(x$g1))}))
+        
+        snp_list <- lapply(snp_list, function(x){
+          x %>%
+            mutate(n_traits=length(unique(trait))) %>%
+            group_by(snp) %>%
+            mutate(n_snps=length(unique(trait))) %>%
+            filter(n_traits==n_snps) %>%
+            distinct(snp) %>%
+            pull(snp)
+        })
+#####
+        
   # Merge in single data frame and then re-split by trait            
         by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(trait,cojo_hit)
         
         by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
-          temp <- x %>% distinct(snp, .keep_all = T) %>%
+          temp <- x %>% 
+            filter(snp %in% snp_list[[paste0("s", unique(x$g1))]]) %>% ##### NEW BIT - extract only SNPs taht were actually tested across all traits
+            distinct(snp, .keep_all = T) %>%
             mutate(bf=exp(lABF)) %>% 
             arrange(desc(bf)) %>% 
             mutate(pp.cv = bf/sum(bf)) %>% 
