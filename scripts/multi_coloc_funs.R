@@ -709,111 +709,39 @@ package.loader <- function(package_name){
 #### final.plot - Final summary plot function
 final.plot <- function(locus,
                        final.locus.table.tmp,
-                       conditional.datasets,
-                       by_snp_PPH3=NULL, ### not necessarily present!
-                       inter=NULL, ### not necessarily present!
+                       data_sub,
+                       finemap,
                        output=opt$output
 ){
+
+# Integrate finemapping (lABF) and GWAS (beta...and p-value?) info
+  full_df <- as.data.frame(rbindlist(lapply(names(data_sub), function(x){
+    left_join(finemap[[x]],
+              data_sub[[x]] %>% select(SNP,Chr,bp,any_of(c("b","bC")),any_of(c("p","pC")),trait,cojo_snp),
+              by=c("snp"="SNP","trait","cojo_snp"))
+  }), fill=TRUE))
   
-  ### Among NOT colocalising traits, extract SNP having the highest lABF (scaled)
-    if(length(by_snp_PPH3)>0){
-      by_snp_PPH3_final <- rbindlist(lapply(by_snp_PPH3, function(x){
-      x %>%
-        dplyr::select(-position, -SNP.PP.H4) %>%
-        gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus) %>%
-        mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
-        mutate(cojo_snp=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
-        dplyr::select(-hit1,-hit2,-t1,-t2)
-    })) %>% group_split(trait, cojo_snp)
-    
-    by_snp_PPH3_final <- as.data.frame(rbindlist(lapply(by_snp_PPH3_final, function(x){
-      x %>% distinct(snp, .keep_all = T) %>%
-        mutate(bf=exp(lABF)) %>% 
-        arrange(desc(bf)) %>% 
-        mutate(joint.pp.cv = bf/sum(bf)) %>%
-        dplyr::filter(joint.pp.cv==max(joint.pp.cv))
-    }))) %>% 
-      dplyr::select(pan.locus, trait, cojo_snp, snp, joint.pp.cv) %>%
-      dplyr::rename(causal_snp=snp)
-    }
-  
-  
-  #### Final locus table - flag colocalising and not colocalising groups
-  loci_table <- final.locus.table.tmp %>%
-    dplyr::select(pan.locus, sub_locus, trait, SNP) %>%
-    group_by(sub_locus) %>%
-    mutate(coloc_out=ifelse(n()>1, "H4", "H3")) %>%
-    dplyr::rename(cojo_snp=SNP)
-  
-  ### H4 traits - add SNPs with highest joint.pp.cv among intersection cs
-  #loci_table %>% 
-  #  filter(coloc_out=="H4") %>%
-  #  left_join(inter, by=c("pan.locus", "sub_locus"="g1"))
-  
-  ### H4 - extract cs intersection SNP having highest joint lABF
-  #inter <- inter %>% 
-  #  group_by(g1) %>%
-  #  filter(joint.pp.cv==max(joint.pp.cv)) %>%
-  #  rename(causal_snp=snp, pp.cv=joint.pp.cv) %>%
-  #  left_join(inter_info %>% select(-bf,-pp.cv,-cred.set,-joint.pp.cv,-lABF), by=c("causal_snp"="snp","g1","pan.locus"), multiple = "all")
-  
-  
-  ### Extract beta info from conditional datasets  
-  data_sub <- unlist(conditional.datasets, recursive=F)
-  
-  ## Retrieve only conditioned results
-  data_sub <- data_sub[grep("results", names(data_sub))]
-  
-  # Another round of unlisting
-  data_sub <- unlist(data_sub, recursive=F)
-  
-  # Add trait and cojo hit as dataframe columns
-  for(i in 1:length(data_sub)){
-    data_sub[[i]] <- data_sub[[i]] %>% 
-      mutate(trait=gsub("(\\w+).results.(.*$)", "\\1", names(data_sub)[[i]]),
-             cojo_snp=gsub("(\\w+).results.(.*$)", "\\2", names(data_sub)[[i]])
-      )
-  }
-  data_sub <- as.data.frame(rbindlist(data_sub, fill=TRUE))
-  
-  
-  #### ASSEMBLE FINAL TABLE FOR PLOTTING
-  
-  if(any(loci_table$coloc_out=="H4")){
-    # H4  
-    temp_H4 <- loci_table %>%
-      dplyr::filter(coloc_out=="H4") %>%
-      left_join(inter %>% dplyr::rename(causal_snp=snp),
-                by=c("pan.locus", "sub_locus"="g1"), multiple="all")
-  }
-  
-  if(any(loci_table$coloc_out=="H3")){
-    # H3  
-    temp_H3 <- loci_table %>% 
-      dplyr::filter(coloc_out=="H3") %>%
-      left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp")) %>%
-      na.omit()
-  }
-    
-  if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_H3,temp_H4) }  
-  if(exists("temp_H3") & !exists("temp_H4")){ final <- temp_H3 }  
-  if(!exists("temp_H3") & exists("temp_H4")){ final <- temp_H4 }  
-  
-  final <- as.data.frame(
-    final %>% left_join(data_sub, by=c("causal_snp"="SNP", "trait", "cojo_snp")) %>%
-      dplyr::select(pan.locus,sub_locus,trait,causal_snp,Chr,bp,freq,any_of(c("b","bC")),joint.pp.cv))
+
+# Add sublocus info to conditional dataset - keep only SNPs actually submitted to coloc
+  loci_table <- full_df %>%
+    right_join(final.locus.table.tmp %>% filter(flag=="keep") %>% select(sub_locus, trait, SNP),
+      by=c("trait", "cojo_snp"="SNP"))
+
+# Find representative SNP to plot
+  final <- as.data.frame(rbindlist(lapply(loci_table %>% group_split(sub_locus), function(x){
+    x %>%
+      group_by(snp) %>%
+      mutate(joint.pp=sum(lABF)) %>%
+      ungroup() %>%
+      filter(joint.pp==max(joint.pp))
+  })))
 
 ## Adjustment for plotting
-    if("bC" %in% names(final)){
-      final <- final %>% mutate(beta=ifelse(is.na(bC), b, bC))
-    } else {
-      final <- final %>% mutate(beta=b)
-    }
-        
   final <- final %>%
-        mutate(dir=ifelse(beta<0, "-", "+")) %>%
-        mutate(group=paste0(sub_locus, " ", causal_snp)) %>%
-        arrange(bp)
+    mutate(beta=ifelse(is.na(bC), b, bC))%>%
+    mutate(dir=ifelse(beta<0, "-", "+")) %>%
+    mutate(group=paste0(sub_locus, " ", snp)) %>%
+    arrange(bp)
 
   #### To delete - just for script developing sake
   #  fwrite(final,
@@ -932,8 +860,7 @@ final.plot <- function(locus,
     d[[i]] <- df
   }
   
-  d <- do.call(rbind, d) %>%
-    mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
+  d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
   
   gene.starts <- by(d$start,d$symbo,FUN = min)
   gene.end <- by(d$end,d$symbo,FUN = max)
@@ -1010,6 +937,6 @@ final.plot <- function(locus,
     plot_grid(p1_legend,p3_legend, ncol=2),
     align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
   
-  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot_2.png"),
+  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
