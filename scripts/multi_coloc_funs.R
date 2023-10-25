@@ -92,13 +92,13 @@ dataset.munge=function(sumstats.file
   
   if("FRQ" %in% colnames(dataset)){
     dataset$MAF=dataset$FRQ
-    dataset$MAF[dataset$MAF>0.5]=1-dataset$MAF[dataset$MAF>0.5]
+    dataset <- dataset %>% mutate(MAF=ifelse(MAF<0.5, MAF, 1-MAF))
   }
   
   if(!is.null(n.lab) & n.lab%in%names(dataset)){
     names(dataset)[names(dataset)==n.lab]="N"
   }else{
-    N_hat<-median(1/((2*dataset$MAF*(1-dataset$MAF))*dataset$SE^2),na.rm = T)
+    N_hat<-median(1/((2*dataset$MAF*(1-dataset$MAF))*dataset$SE^2),na.rm = T) ### But where does SE comes from?? No checks performed earlier
     dataset$N=ceiling(N_hat)
   }
   
