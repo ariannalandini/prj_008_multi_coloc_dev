@@ -263,7 +263,8 @@ if(locus %in% hla_locus){
         mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
         # Add trait and cojo_hit info, to merge with loci table later
         select(trait,cojo_snp,snp,lABF.,SNP.PP, cred.set) %>%
-        rename("lABF"="lABF.")
+        rename("lABF"="lABF.") %>%
+        filter(snp!="null")
       fine.res
     })
     
@@ -340,7 +341,7 @@ if(locus %in% hla_locus){
         groups=data.frame(snp=names(groups$membership),group=groups$membership)
   # Assign group to coloc results   
         final.colocs.H4$g1=groups$group[match(final.colocs.H4$hit1,groups$snp)]
-  # Assign group to indipendent SNPs  
+  # Assign group to independent SNPs  
         final.locus.table.tmp <- coloc.subgrouping(final.colocs.H4, final.locus.table.tmp)
   
   ### Flag SNPs not passing p-value filtering condition applied to colocalisation groups
