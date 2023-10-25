@@ -737,8 +737,12 @@ final.plot <- function(locus,
   })))
 
 ## Adjustment for plotting
+  if("bC" %in% names(final)){
+    final <- final %>% mutate(beta=ifelse(is.na(bC), b, bC))
+  } else {
+    final <- final %>% mutate(beta=b)
+  } ### All this should be automatically fixed by adjustment I made to cojo output in the dev branch!!
   final <- final %>%
-    mutate(beta=ifelse(is.na(bC), b, bC))%>%
     mutate(dir=ifelse(beta<0, "-", "+")) %>%
     mutate(group=paste0(sub_locus, " ", snp)) %>%
     arrange(bp)
