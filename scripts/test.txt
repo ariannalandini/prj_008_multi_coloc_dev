@@ -1,6 +1,8 @@
 ##### Check how merge works for two parallel branches
 
 banana
-apple
+chocolate
 mango
 pear
+
+An additional line
