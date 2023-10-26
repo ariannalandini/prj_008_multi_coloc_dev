@@ -1,0 +1,6 @@
+##### Check how merge works for two parallel branches
+
+banana
+apple
+mango
+pear
