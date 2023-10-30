@@ -210,16 +210,16 @@ dataset.munge=function(sumstats.file
   
 # Add type and sdY/s
   dataset$type <- type
-  if(type=="cc" & !(is.null(s))){
+  if(type=="cc" & !(is.null(s)) && !is.na(s)){ # && prevents to return "logical(0)" when s is null
     dataset$s=s
-  } else if(type=="cc" && is.null(s)){
+  } else if(type=="cc" & (is.null(s) || is.na(s))){
     #### Is this correct?? Is "s" strictly necessary for cc traits??
     stop("Please provide s, the proportion of samples who are cases")
   }
 
-  if(type=="quant" & !(is.null(sdY)) & !is.na(sdY)){
+  if(type=="quant" & !(is.null(sdY)) && !is.na(sdY)){
     dataset$sdY <- sdY
-  } else if(type=="quant" & (is.null(sdY) | is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
+  } else if(type=="quant" & (is.null(sdY) || is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
     dataset$sdY <- coloc:::sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
@@ -245,7 +245,7 @@ dataset.munge=function(sumstats.file
                    match.min.prop=0)
     
   #dataset=dataset[match(flip.t$rsid,dataset$SNP),]
-  dataset <- dataset[flip.t$`_NUM_ID_.ss`]
+  dataset <- dataset[flip.t$`_NUM_ID_.ss`,]
 
 # Keep both original and map SNP id
   dataset$snp_map <- flip.t$rsid
@@ -278,16 +278,23 @@ cojo.ht=function(D=datasets[[1]]
   
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
-  write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
+  write(D$SNP,ncol=1,file=paste0(random.number,".snp.list"))
   system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --geno-counts --out ",random.number))
   
   freqs=fread(paste0(random.number,".gcount"))
-  freqs$FreqA1=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))  #### Why doing all this when plink can directly calculate it with --frq?
-  D$FREQ=freqs$FreqA1[match(D$snp,freqs$ID)]
-  idx=which(D$a1!=freqs$REF)
-  D$FREQ[idx]=1-D$FREQ[idx]
+  freqs$FreqREF=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))  #### Why doing all this when plink can directly calculate it with --frq?
+  
+# Assign allele frequency from the LD reference  
+  D <- D %>%
+    left_join(freqs %>% select(ID,FreqREF,REF), by=c("SNP"="ID")) %>%
+    mutate(FREQ=ifelse(REF==A1, FreqREF, (1-FreqREF))) %>%
+    select(-FreqREF,-REF)
+### Following code was causing a lot of mismatch in allele frequency between GWAS and reference  
+#  D$FREQ=freqs$FreqA1[match(D$SNP,freqs$ID)]
+#  idx=which(D$A1!=freqs$REF)
+#  D$FREQ[idx]=1-D$FREQ[idx]
 #  D$se=sqrt(D$varbeta) # why not keeping se from the munging? se is anyway required to calculate varbeta
-  D <- D %>% select("SNP","A1","A2","freq","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
+  D <- D %>% select("SNP","A1","A2","FREQ","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
 
 # step1 determine independent snps

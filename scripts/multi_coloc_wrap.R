@@ -48,7 +48,7 @@ option_list <- list(
               help="MAF filter", metavar="character"),
   make_option("--bfile", type="character", default=NULL,
               help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character"),
-  make_option("--save_inter_files", type="numeric", default=FALSE, 
+  make_option("--save_inter_files", type="logical", default=FALSE, 
               help="Whether to save intermediate datasets as R objects", metavar="character")
 ); 
 
@@ -90,16 +90,10 @@ if(unique(loci.table.tmp$grch)==37){
   hla_start=28477797
   hla_end=33448354
 }
+hla_coord <- seq(hla_start,hla_end)
 
-## Identify loci falling in HLA region
-##### NB: This doesn't work when the locus spans the whole extension of HLA!!!!!
-hla_locus <- unique((
-  loci.table %>%
-    filter(chr==6) %>%
-    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>% filter(flag==TRUE))$pan_locus)
-  
 ## Don't run for HLA loci as cojo will take forever
-if(locus %in% hla_locus){
+if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start):unique(loci.table.tmp$end), hla_coord)) > 0){
     cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
 } else { 
   start=min(loci.table.tmp$start)-100000
