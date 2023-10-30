@@ -47,7 +47,9 @@ option_list <- list(
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character"),
   make_option("--bfile", type="character", default=NULL,
-              help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character")
+              help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character"),
+  make_option("--save_inter_files", type="numeric", default=FALSE, 
+              help="Whether to save intermediate datasets as R objects", metavar="character")
 ); 
 
 opt_parser = OptionParser(option_list=option_list);
@@ -150,11 +152,19 @@ if(locus %in% hla_locus){
   names(datasets) <- unique(loci.table.tmp$trait)
   cat("\nGWAS summary statistics succesfully munged\n")
   
+<<<<<<< scripts/multi_coloc_wrap.R
+  if(opt$save_inter_files==TRUE){
+    saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
+#    datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
+  }  
+
+=======
 ############################################################## To delete (?)
 # saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
 # datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
 ############################################################## 
   
+>>>>>>> scripts/multi_coloc_wrap.R
 # Perform cojo
   conditional.datasets=list()
   max.loci=1
@@ -172,7 +182,7 @@ if(locus %in% hla_locus){
       max.loci=max(max.loci,nrow(tmp$ind.snps))
     }
   }
-## Remove eventually empty dataframes (maf filter removed all indipendent SNPs)  
+## Remove eventually empty dataframes (maf filter removed all independent SNPs)  
   conditional.datasets <- conditional.datasets %>% discard(is.null)
   
   if(length(conditional.datasets)==0){
@@ -181,11 +191,10 @@ if(locus %in% hla_locus){
   
     cat("\nSecondary associations signals identified with COJO\n")
      
-  ############################################################## To delete
-  # saveRDS(conditional.datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.RData"))
-  # conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.RData"))
-  ##############################################################
-    
+    if(opt$save_inter_files==TRUE){
+      saveRDS(conditional.datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
+#      conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
+    }
     
 
 ##################################################### ON GOING
@@ -229,14 +238,71 @@ if(locus %in% hla_locus){
     }
     dev.off()
   
-  
+################################################ FINEMAPPING BY SINGLE (CONDTIONED) TRAIT!!!
+    cs_threshold=0.99
+    
+# Format condiitonal datasets
+    data_sub <- unlist(conditional.datasets, recursive=F)
+    ## Retrieve only conditioned results
+    data_sub <- data_sub[grep("results", names(data_sub))]
+    # Another round of unlisting
+    data_sub <- unlist(data_sub, recursive=F)
+    
+    # Add trait and cojo hit as dataframe columns
+    for(i in 1:length(data_sub)){
+      data_sub[[i]] <- data_sub[[i]] %>% 
+        mutate(trait=gsub("(\\w+).results.(.*$)", "\\1", names(data_sub)[[i]]),
+               cojo_snp=gsub("(\\w+).results.(.*$)", "\\2", names(data_sub)[[i]])
+        )
+    }
+    
+# Perform finemapping of each conditional dataset
+    finemap <- lapply(data_sub, function(x){
+      trait <- unique(x$trait)
+      cojo_snp <- unique(x$cojo_snp)
+      # Format input  
+      if(any(!is.na(x$bC))){
+        x <- x %>%
+          select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
+          rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
+      }else{
+        x <- x %>%
+          select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
+          rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+      }
+      x$varbeta=x$varbeta^2
+      x=na.omit(x)
+      # Finemap  
+      fine.res <- finemap.abf(x) %>%
+        arrange(desc(SNP.PP)) %>% 
+        mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
+        # Add trait and cojo_hit info, to merge with loci table later
+        select(trait,cojo_snp,snp,lABF.,SNP.PP, cred.set) %>%
+        rename("lABF"="lABF.") %>%
+        filter(snp!="null")
+      fine.res
+    })
+    
+# Extract credible set
+    cs <- lapply(finemap, function(x){
+# Identify SNPs part of the credible set (as specified by cs_threshold)
+      w <- which(x$cred.set > cs_threshold)[1]
+      x <- x %>% 
+        slice(1:w) %>%
+        mutate(cred.set=paste0(snp, collapse=","))
+      x
+    })
+##################################      
+    
+### COLOC
+    
   # Only if there are multiple traits at the same locus
     if(length(conditional.datasets)>1){
       
   # Identify all pairwise combination of traits to test
       pairwise.list=t(combn(names(conditional.datasets),2))
   # Prepare final locus.table for coloc
-      final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp)
+      final.locus.table.tmp <- coloc.prep.table(pairwise.list, conditional.datasets, loci.table.tmp,mappa.loc)
   
   ### Run colocalisation and store results
       final.colocs.summary=c()
@@ -249,7 +315,7 @@ if(locus %in% hla_locus){
           conditional.dataset2 = conditional.datasets[[pairwise.list[i,2]]],
           p.threshold.cond = 1e-6,
           p.threshold.orig = 5e-8)
-  # Check if coloc was actually performed (necessary?)         
+  # Check if coloc was actually performed        
         if(!is.null(coloc.res)){
   # Store the summary output in a data frame, adding tested traits column         
           only_summary_df <- as.data.frame(rbindlist(lapply(coloc.res, function(x) {
@@ -257,13 +323,13 @@ if(locus %in% hla_locus){
               mutate(t1=pairwise.list[i,1], t2=pairwise.list[i,2])
           }))) %>% mutate(pan.locus=locus)
   # Store the results output in a list, adding tested traits column     
-          only_results_list <- lapply(coloc.res, function(x) {
-            x$results <- x$results %>% 
-              mutate(t1=pairwise.list[i,1], t2=pairwise.list[i,2], pan.locus=locus)
-          })
+#          only_results_list <- lapply(coloc.res, function(x) {
+#            x$results <- x$results %>% 
+#              mutate(t1=pairwise.list[i,1], t2=pairwise.list[i,2], pan.locus=locus)
+#          })
   # Append loop result
             final.colocs.summary=rbind(final.colocs.summary,only_summary_df)
-            final.colocs.results=c(final.colocs.results,only_results_list)
+#            final.colocs.results=c(final.colocs.results,only_results_list)
         }
       }
   
@@ -272,16 +338,15 @@ if(locus %in% hla_locus){
   
   # Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
       final.colocs.H4 <- final.colocs.summary[index,]
-      by_snp_PPH4 <- final.colocs.results[index]
-      by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)]
+#      by_snp_PPH4 <- final.colocs.results[index]
+#      by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)]
       
    
   ### Define colocalisation groups
       colocalization.table.all=c()
   #    colocalization.table.H4=c() (needed?)
   #   k=1 (needed? Left from Nicola's code)
-      cs_threshold=0.99 #### Set as user provided parameter?
-          
+
   # If at least a couple of traits successfully colocalised 
       if(nrow(final.colocs.H4)>0){
   # Create a graph from the "hit1" and "hit2" columns of the final.colocs.H4 data frame
@@ -291,7 +356,7 @@ if(locus %in% hla_locus){
         groups=data.frame(snp=names(groups$membership),group=groups$membership)
   # Assign group to coloc results   
         final.colocs.H4$g1=groups$group[match(final.colocs.H4$hit1,groups$snp)]
-  # Assign group to indipendent SNPs  
+  # Assign group to independent SNPs  
         final.locus.table.tmp <- coloc.subgrouping(final.colocs.H4, final.locus.table.tmp)
   
   ### Flag SNPs not passing p-value filtering condition applied to colocalisation groups
@@ -321,8 +386,24 @@ if(locus %in% hla_locus){
         pleio.all$Z=pleio.all$b/pleio.all$se
         pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
         
+<<<<<<< scripts/multi_coloc_wrap.R
+        pleio.all <- as.data.frame(pleio.all %>%
+          group_by(SNP,trait) %>%
+          mutate(Z=mean(Z), Z_scaled=mean(Z_scaled)) %>%
+          ungroup() %>%
+          distinct(SNP,trait,Z,Z_scaled)
+        )
+          
+##### Raw Z-scores           
+#        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
+### aggregate function missing, defaulting to ‘length’ - This error occurs when more than one value could be placed in the individual cells of the wide data frame. Mean Z-scores is thus taken for each SNP-trait combo (beta values varies, why?!)     
+
+        a <- pleio.all %>% select(-Z_scaled) %>% spread(trait, Z)
+        a[is.na(a)] <- 0
+=======
 ##### Raw Z-scores        
         a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
+>>>>>>> scripts/multi_coloc_wrap.R
         row.names(a)=a$SNP
                 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table.pdf"),
@@ -337,7 +418,12 @@ if(locus %in% hla_locus){
         dev.off()
 
 ##### Scaled Z-scores
+<<<<<<< scripts/multi_coloc_wrap.R
+        a2 <- pleio.all %>% select(-Z) %>% spread(trait, Z_scaled)
+        a2[is.na(a2)] <- 0
+=======
         a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
+>>>>>>> scripts/multi_coloc_wrap.R
         row.names(a2)=a2$SNP
 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
@@ -350,8 +436,12 @@ if(locus %in% hla_locus){
           col=COL2('RdBu', 200),
           col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
         dev.off()
+<<<<<<< scripts/multi_coloc_wrap.R
+
+=======
   
      
+>>>>>>> scripts/multi_coloc_wrap.R
   ### Plot coloc
         coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
       } else {
@@ -362,16 +452,14 @@ if(locus %in% hla_locus){
       } 
   
   ### Save ALL colocalisation summary output    
-      if(nrow(final.colocs.summary)>0){
+      if(!is.null(final.colocs.summary)){
   #      final.colocs.summary$pan.locus=locus
         colocalization.table.all=rbind(colocalization.table.all,final.colocs.summary) ### Necessary??
         write.table(colocalization.table.all,
-          file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"),
-          row.names=F,quote=F,sep="\t")
+          file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"), row.names=F,quote=F,sep="\t")
       }
       
       if(nrow(final.colocs.H4)>0){
-  
   ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
         colocalization.table.H4 <- final.colocs.H4 %>%
@@ -391,132 +479,26 @@ if(locus %in% hla_locus){
         ) 
         
   # Get the index of rows where at least one "remove" flag is present
-        index2 <- which(apply(colocalization.table.H4, 1, function(x) sum(x == "keep"))==2)
+#        index2 <- which(apply(colocalization.table.H4, 1, function(x) sum(x == "keep"))==2)
   
   # Remove all SNPs flagged and save from coloc summary output     
         colocalization.table.H4 <- colocalization.table.H4 %>%
           filter(flag.x=="keep" & flag.y=="keep") %>%
           select(-flag.x, -flag.y)
-    
-  # Result output of coloc
-        by_snp_PPH4_final <- by_snp_PPH4[index2]
-  
-  ### Formatting of coloc results output for merge of same SNP across multiple traits         
-        by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
-          x %>%
-  # Add sub locus info in result output of coloc    
-            left_join(colocalization.table.H4 %>% select(t1,hit1,t2,hit2,g1),
-              by=c("t1","hit1","hit2","t2")) %>% 
-            select(snp, matches("lABF"), t1,hit1,t2,hit2,g1,pan.locus) %>%
-  # Move lABF values in a single column (SNPs duplicated by trait)          
-            gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus,-g1) %>%
-            mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
-            mutate(cojo_hit=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
-            select(-hit1,-hit2,-t1,-t2)
-        })
-  
-  # Merge in single data frame and then re-split by trait            
-        by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(trait,cojo_hit)
         
-        by_snp_PPH4_final <- lapply(by_snp_PPH4_final, function(x){
-          temp <- x %>% distinct(snp, .keep_all = T) %>%
-            mutate(bf=exp(lABF)) %>% 
-            arrange(desc(bf)) %>% 
-            mutate(pp.cv = bf/sum(bf)) %>% 
-            mutate(cred.set = cumsum(pp.cv)) %>%
-            arrange(cred.set) ### just to be extra sure
-          w <- which(temp$cred.set > cs_threshold)[1] ### do not hard code 99%
-          
-          ### CUMULATIVE SUM PLOT (to keep?)
-          ggplot(temp %>% mutate(label=seq(1:nrow(temp))), aes(x=label, y=cred.set)) +
-            geom_line() +
-            geom_point(temp %>% mutate(label=seq(1:nrow(temp))) %>% slice(1:w), mapping=aes(x=label, y=cred.set, color="red"), show.legend = FALSE) +
-            #          scale_x_continuous(breaks=seq(0, nrow(temp), 500)) + #### automatic breaks?
-            ggtitle(paste0("99% credible set (in red) for ", unique(temp$trait)," (locus ", unique(temp$pan.locus), ", sublocus ",  unique(temp$g1), ")")) +
-            xlab("Number of SNPs") + theme(axis.title.y=element_blank())
-          ggsave(paste0(opt$output, "/plots/locus_", locus, "_sublocus_", unique(temp$g1), "_", unique(temp$trait), "_99_credible_set.png"), width=30, height = 12, units = "cm")
-          
-          temp <- temp %>% slice(1:w)
-          temp
-        })
-        
-  ### Credible set intersection
-        inter_info <- rbindlist(by_snp_PPH4_final) %>%
-          group_by(g1) %>%
-          mutate(n_traits=length(unique(trait))) %>%
-          group_by(g1,snp) %>%
-          mutate(
-            n_snps=length(unique(trait)),
-            flag=n_traits==n_snps,
-            joint.pp.cv=sum(pp.cv)
-            ) %>%
-          ungroup() %>%
-          filter(flag==TRUE) %>%
-          select(-n_traits,-n_snps, -flag) 
-        
-        inter <- inter_info %>%
-          distinct(snp, .keep_all=T) %>%
-          select(pan.locus,g1,snp,joint.pp.cv) %>%
-          group_by(g1) %>%
-          mutate(joint.pp.cv=joint.pp.cv/sum(joint.pp.cv)) %>%
-          filter(joint.pp.cv==max(joint.pp.cv, na.rm=T)) %>%
-          ungroup() #%>%
-          #arrange(g1, desc(joint.pp.cv))
-          
-    ### Add cs to H4 coloc table
-        colocalization.table.H4 <- colocalization.table.H4 %>%
-          left_join(
-            rbindlist(lapply(inter %>% group_split(g1), function(x){
-              x %>% 
-                mutate(cs=paste0(x$snp, collapse=",")) %>%
-                distinct(pan.locus,g1,cs)
-            })), by=c("pan.locus", "g1"))
-          
         write.table(colocalization.table.H4,
-          file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"), row.names=F,quote=F,sep="\t")    
-   
-             
-  ############################################################## Joint PP      
-  # Merge in single data frame and then re-split by sub locus            
-  #      by_snp_PPH4_final <- rbindlist(by_snp_PPH4_final) %>% group_split(g1)
-  
-  #### Fine-mapping likely causal variant ~~~~ MOVE TO FUNCTION(?) ~~~~~
-  #      fine.mapping.table <- as.data.frame(rbindlist(lapply(by_snp_PPH4_final, function(x){
-         
-  #         merged_df <- x %>% 
-  # Merge by SNP dataframes from the same sub locus
-  #          distinct(trait, snp, lABF, .keep_all = T) %>% ## also lABF, just to check that it stays the same for the same SNP-trait pairs
-  #          arrange(snp, trait) %>%
-  #          mutate(lABF_exp=exp(lABF)) %>% ### exp of log to go back to ABF
-  #          group_by(trait) %>% ### group by trait
-  #          mutate(lABF_std=log(lABF_exp/sum(lABF_exp))) %>%
-  #          group_by(snp) %>%
-  #          mutate(lABF_sum=exp(sum(lABF_std))) %>%
-  #          ungroup()
-           
-  #        temp <- merged_df %>%
-  #          distinct(snp, g1, pan.locus, lABF_sum) %>%
-  #          mutate(tot=sum(lABF_sum)) %>% 
-  #          mutate(lABF_sum_scaled=lABF_sum/tot) %>%
-  #          filter(lABF_sum_scaled==max(lABF_sum_scaled)) %>%
-  #          select(snp, lABF_sum_scaled, pan.locus, g1)
-          
-  #        final <- temp %>% left_join(merged_df %>% select(snp, trait, pan.locus, g1),
-  #          by=c("snp", "pan.locus", "g1"), multiple = "all")
-          
-  #        final
-  #      })))
-  ###############################################################
-  
+                    file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"), row.names=F,quote=F,sep="\t") 
     }
     
   ### Final summary plot    
-      tryCatch({
-        final.plot(locus,final.locus.table.tmp,conditional.datasets,by_snp_PPH3=by_snp_PPH3,inter=inter,output=opt$output)}, error = function(e) {
-        cat("final.plot function failed for some reason and the plot was not produced. Ask Arianna")
+      if(!is.null(final.colocs.summary)){
+        tryCatch({
+          final.plot(locus,final.locus.table.tmp,data_sub,finemap,output=opt$output)}, error = function(e) {
+          cat("final.plot function failed for some reasons and the plot was not produced. Ask Arianna\n")
+          print(e)
         })
+      }
   
-      
     } else {
       final.locus.table.tmp=conditional.datasets[[1]]$ind.snps
       final.locus.table.tmp$start=unique(locus.info$start)
@@ -528,8 +510,11 @@ if(locus %in% hla_locus){
       final.locus.table.tmp$bJ_se=NA
       final.locus.table.tmp$pJ=NA
       final.locus.table.tmp$LD_r=NA
-      alleles=unlist(mappa.loc[mappa.loc$SNP==final.locus.table.tmp$SNP,c("A1","A2")])
-      final.locus.table.tmp$othA=alleles[!(alleles%in%final.locus.table.tmp$refA)]
+#      alleles=unlist(mappa.loc[mappa.loc$SNP %in% final.locus.table.tmp$SNP,c("A1","A2")]) ### to remove if next two lines work
+#      final.locus.table.tmp$othA=alleles[!(alleles%in%final.locus.table.tmp$refA)] ### to remove if next two lines work
+      alleles=mappa.loc[mappa.loc$SNP %in% final.locus.table.tmp$SNP,c("A1","A2")]
+      final.locus.table.tmp <- final.locus.table.tmp %>%
+        mutate(othA=ifelse(refA==alleles$A1, alleles$A2, alleles$A1))
       final.locus.table.tmp$trait=names(datasets)[1]
       final.locus.table.tmp=as.data.frame(final.locus.table.tmp)
       final.locus.table.tmp=final.locus.table.tmp[,col.order]
@@ -537,13 +522,15 @@ if(locus %in% hla_locus){
     
     final.locus.table <- as.data.frame(rbind(final.locus.table,final.locus.table.tmp)) 
     if("flag" %in% names(final.locus.table)){
-      final.locus.table <- final.locus.table %>% select(-flag) }
+      final.locus.table <- final.locus.table %>%
+        mutate(flag=ifelse(flag=="keep", TRUE, FALSE)) %>% 
+        rename(tested_by_coloc=flag) %>%
+        arrange(sub_locus)
+      }
     
-    if(exists("colocalization.table.H4")){
-      final.locus.table <- final.locus.table %>% left_join(rbind(
-        colocalization.table.H4 %>% select(hit1,t1,pan.locus,g1,cs) %>% rename(SNP=hit1,trait=t1),
-        colocalization.table.H4 %>% select(hit2,t2,pan.locus,g1,cs) %>% rename(SNP=hit2,trait=t2)
-        ) %>% distinct(), by=c("SNP","trait","pan.locus","sub_locus"="g1"))
+    if(exists("final.colocs.summary")){
+      cs <- as.data.frame(rbindlist(cs)) %>% distinct(trait,cojo_snp,cred.set)
+      final.locus.table <- final.locus.table %>% left_join(cs, by=c("trait","SNP"="cojo_snp"))
     }
     
     print(final.locus.table)

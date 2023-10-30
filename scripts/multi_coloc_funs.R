@@ -133,9 +133,9 @@ dataset.munge=function(sumstats.file
 
 # Load sumstat
   if(is.character(sumstats.file)){
-    dataset=fread(sumstats.file)
+    dataset=fread(sumstats.file, data.table=F)
   }else{
-    dataset=sumstats.file
+    dataset=as.data.frame(sumstats.file)
   }
 
   if(!is.null(a1.lab) & a1.lab%in%names(dataset) & !is.null(a0.lab) & a0.lab%in%names(dataset) ){
@@ -185,13 +185,13 @@ dataset.munge=function(sumstats.file
   
   if("FRQ" %in% colnames(dataset)){
     dataset$MAF=dataset$FRQ
-    dataset$MAF[dataset$MAF>0.5]=1-dataset$MAF[dataset$MAF>0.5]
+    dataset <- dataset %>% mutate(MAF=ifelse(MAF<0.5, MAF, 1-MAF))
   }
   
   if(!is.null(n.lab) & n.lab%in%names(dataset)){
     names(dataset)[names(dataset)==n.lab]="N"
   }else{
-    N_hat<-median(1/((2*dataset$MAF*(1-dataset$MAF))*dataset$SE^2),na.rm = T)
+    N_hat<-median(1/((2*dataset$MAF*(1-dataset$MAF))*dataset$SE^2),na.rm = T) ### But where does SE comes from?? No checks performed earlier
     dataset$N=ceiling(N_hat)
   }
   
@@ -216,9 +216,9 @@ dataset.munge=function(sumstats.file
     stop("Please provide s, the proportion of samples who are cases")
   }
 
-  if(type=="quant" & !(is.null(sdY))){
+  if(type=="quant" & !(is.null(sdY)) & !is.na(sdY)){
     dataset$sdY <- sdY
-  } else if(type=="quant" & is.null(sdY)){
+  } else if(type=="quant" & (is.null(sdY) | is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
     dataset$sdY <- coloc:::sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
@@ -269,22 +269,22 @@ dataset.munge=function(sumstats.file
 ### cojo.ht ###
 ### Performs --cojo-slct first to identify all independent SNPs and --cojo-cond then to condition upon identified SNPs
 cojo.ht=function(D=datasets[[1]]
-                 ,plink.bin="/project/alfredo/software/plink/1.90_20210606/plink"
-                 ,gcta.bin="/project/alfredo/software/GCTA/1.94.0beta/gcta64"
+                 ,plink.bin="/ssu/gassu/software/plink/2.00_20211217/plink2"
+                 ,gcta.bin="/ssu/gassu/software/GCTA/1.94.0beta/gcta64"
                  ,bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/p01_output/ukbb_all_30000_random_unrelated_white_british"
                  ,p.tresh=1e-4
                  ,maf.thresh=0.0001){
   
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
-  write(D$SNP,ncol=1,file=paste0(random.number,".snp.list"))
-  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --freqx --out ",random.number))
+  write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
+  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --geno-counts --out ",random.number))
   
-  freqs=fread(paste0(random.number,".frqx"))
-  freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")]))) #### Why doing all this when plink can directly calculate it with --frq?
-  D$freq=freqs$FreqA1[match(D$SNP,freqs$SNP)]
-  idx=which(D$A1!=freqs$A1)
-  D$freq[idx]=1-D$freq[idx]
+  freqs=fread(paste0(random.number,".gcount"))
+  freqs$FreqA1=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))  #### Why doing all this when plink can directly calculate it with --frq?
+  D$FREQ=freqs$FreqA1[match(D$snp,freqs$ID)]
+  idx=which(D$a1!=freqs$REF)
+  D$FREQ[idx]=1-D$FREQ[idx]
 #  D$se=sqrt(D$varbeta) # why not keeping se from the munging? se is anyway required to calculate varbeta
   D <- D %>% select("SNP","A1","A2","freq","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
@@ -293,9 +293,9 @@ cojo.ht=function(D=datasets[[1]]
   system(paste0(gcta.bin," --bfile ", random.number, " --cojo-p ", p.tresh, " --maf ", maf.thresh, " --extract ", random.number, ".snp.list --cojo-file ", random.number, "_sum.txt --cojo-slct --out ", random.number, "_step1"))
   
   if(file.exists(paste0(random.number,"_step1.jma.cojo"))){
-    
     ind.snp=fread(paste0(random.number,"_step1.jma.cojo")) %>%
-      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
+      left_join(D %>% select(SNP,type,any_of(c("sdY", "s"))), by="SNP")
+
     dataset.list=list()
     dataset.list$ind.snps=ind.snp
     dataset.list$results=list()
@@ -335,6 +335,7 @@ cojo.ht=function(D=datasets[[1]]
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
+
     step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
       left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 
@@ -394,11 +395,11 @@ plot.cojo.ht=function(cojo.ht.obj){
 
 
 ### coloc.prep.table
-coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp){
+coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,mappa.loc){
   ### Select only 1) genome-wide significant or 2) with conditioned p-value < 1e-6 SNPs
   final.locus.table.tmp <- as.data.frame(rbindlist(lapply(names(conditional.datasets), function(x){
     tmp <- conditional.datasets[[x]]$ind.snps
-    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)}
+#    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)} # BUT WHY?! Anyway filtering later and here is fucking up everything
     tmp <- tmp %>%
       mutate(
         start=unique(loci.table.tmp$start),
@@ -472,7 +473,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
-        colo.res <- coloc.abf.ht(D1,D2)
+        colo.res <- coloc.abf(D1,D2)
 ## Save coloc summary        
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
@@ -697,9 +698,7 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
           merged.datasets2=merged.datasets2[,c("snp_map","b","se","p","n")]
           names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
         }
-        
         merged.datasets=merge(merged.datasets,merged.datasets2,by="SNP",all = FALSE,suffixes =c(""))
-        
       }
     }
     
@@ -776,110 +775,43 @@ package.loader <- function(package_name){
 #### final.plot - Final summary plot function
 final.plot <- function(locus,
                        final.locus.table.tmp,
-                       conditional.datasets,
-                       by_snp_PPH3=NULL, ### not necessarily present!
-                       inter=NULL, ### not necessarily present!
+                       data_sub,
+                       finemap,
                        output=opt$output
 ){
+
+# Integrate finemapping (lABF) and GWAS (beta...and p-value?) info
+  full_df <- as.data.frame(rbindlist(lapply(names(data_sub), function(x){
+    left_join(finemap[[x]],
+              data_sub[[x]] %>% select(SNP,Chr,bp,any_of(c("b","bC")),any_of(c("p","pC")),trait,cojo_snp),
+              by=c("snp"="SNP","trait","cojo_snp"))
+  }), fill=TRUE))
   
-  ### Among NOT colocalising traits, extract SNP having the highest lABF (scaled)
-    if(length(by_snp_PPH3)>0){
-      by_snp_PPH3_final <- rbindlist(lapply(by_snp_PPH3, function(x){
-      x %>%
-        dplyr::select(-position, -SNP.PP.H4) %>%
-        gather("trait", "lABF", -snp,-hit1,-hit2,-t1,-t2,-pan.locus) %>%
-        mutate(trait=ifelse(trait=="lABF.df1", unique(t1), unique(t2))) %>%
-        mutate(cojo_snp=ifelse(trait==t1, unique(hit1), unique(hit2))) %>%
-        dplyr::select(-hit1,-hit2,-t1,-t2)
-    })) %>% group_split(trait, cojo_snp)
-    
-    by_snp_PPH3_final <- as.data.frame(rbindlist(lapply(by_snp_PPH3_final, function(x){
-      x %>% distinct(snp, .keep_all = T) %>%
-        mutate(bf=exp(lABF)) %>% 
-        arrange(desc(bf)) %>% 
-        mutate(joint.pp.cv = bf/sum(bf)) %>%
-        dplyr::filter(joint.pp.cv==max(joint.pp.cv))
-    }))) %>% 
-      dplyr::select(pan.locus, trait, cojo_snp, snp, joint.pp.cv) %>%
-      dplyr::rename(causal_snp=snp)
-    }
-  
-  
-  #### Final locus table - flag colocalising and not colocalising groups
-  loci_table <- final.locus.table.tmp %>%
-    dplyr::select(pan.locus, sub_locus, trait, SNP) %>%
-    group_by(sub_locus) %>%
-    mutate(coloc_out=ifelse(n()>1, "H4", "H3")) %>%
-    dplyr::rename(cojo_snp=SNP)
-  
-  ### H4 traits - add SNPs with highest joint.pp.cv among intersection cs
-  #loci_table %>% 
-  #  filter(coloc_out=="H4") %>%
-  #  left_join(inter, by=c("pan.locus", "sub_locus"="g1"))
-  
-  ### H4 - extract cs intersection SNP having highest joint lABF
-  #inter <- inter %>% 
-  #  group_by(g1) %>%
-  #  filter(joint.pp.cv==max(joint.pp.cv)) %>%
-  #  rename(causal_snp=snp, pp.cv=joint.pp.cv) %>%
-  #  left_join(inter_info %>% select(-bf,-pp.cv,-cred.set,-joint.pp.cv,-lABF), by=c("causal_snp"="snp","g1","pan.locus"), multiple = "all")
-  
-  
-  ### Extract beta info from conditional datasets  
-  data_sub <- unlist(conditional.datasets, recursive=F)
-  
-  ## Retrieve only conditioned results
-  data_sub <- data_sub[grep("results", names(data_sub))]
-  
-  # Another round of unlisting
-  data_sub <- unlist(data_sub, recursive=F)
-  
-  # Add trait and cojo hit as dataframe columns
-  for(i in 1:length(data_sub)){
-    data_sub[[i]] <- data_sub[[i]] %>% 
-      mutate(trait=gsub("(\\w+).results.(.*$)", "\\1", names(data_sub)[[i]]),
-             cojo_snp=gsub("(\\w+).results.(.*$)", "\\2", names(data_sub)[[i]])
-      )
-  }
-  data_sub <- as.data.frame(rbindlist(data_sub, fill=TRUE))
-  
-  
-  #### ASSEMBLE FINAL TABLE FOR PLOTTING
-  
-  if(any(loci_table$coloc_out=="H4")){
-    # H4  
-    temp_H4 <- loci_table %>%
-      dplyr::filter(coloc_out=="H4") %>%
-      left_join(inter %>% dplyr::rename(causal_snp=snp),
-                by=c("pan.locus", "sub_locus"="g1"), multiple="all")
-  }
-  
-  if(any(loci_table$coloc_out=="H3")){
-    # H3  
-    temp_H3 <- loci_table %>% 
-      dplyr::filter(coloc_out=="H3") %>%
-      left_join(by_snp_PPH3_final, by=c("pan.locus","trait","cojo_snp"))
-  }
-    
-  if(exists("temp_H3") & exists("temp_H4")){ final <- rbind(temp_H3,temp_H4) }  
-  if(exists("temp_H3") & !exists("temp_H4")){ final <- temp_H3 }  
-  if(!exists("temp_H3") & exists("temp_H4")){ final <- temp_H4 }  
-  
-  final <- as.data.frame(
-    final %>% left_join(data_sub, by=c("causal_snp"="SNP", "trait", "cojo_snp")) %>%
-      dplyr::select(pan.locus,sub_locus,trait,causal_snp,Chr,bp,freq,any_of(c("b","bC")),joint.pp.cv))
+
+# Add sublocus info to conditional dataset - keep only SNPs actually submitted to coloc
+  loci_table <- full_df %>%
+    right_join(final.locus.table.tmp %>% filter(flag=="keep") %>% select(sub_locus, trait, SNP),
+      by=c("trait", "cojo_snp"="SNP"))
+
+# Find representative SNP to plot
+  final <- as.data.frame(rbindlist(lapply(loci_table %>% group_split(sub_locus), function(x){
+    x %>%
+      group_by(snp) %>%
+      mutate(joint.pp=sum(lABF)) %>%
+      ungroup() %>%
+      filter(joint.pp==max(joint.pp))
+  })))
 
 ## Adjustment for plotting
-    if("bC" %in% names(final)){
-      final <- final %>% mutate(beta=ifelse(is.na(bC), b, bC))
-    } else {
-      final <- final %>% mutate(beta=b)
-    }
-        
+  if("bC" %in% names(final)){
+    final <- final %>% mutate(beta=ifelse(is.na(bC), b, bC))
+  } else {
+    final <- final %>% mutate(beta=b)
+  } ### All this should be automatically fixed by adjustment I made to cojo output in the dev branch!!
   final <- final %>%
-        mutate(dir=ifelse(beta<0, "-", "+")) %>%
-        mutate(group=paste0(sub_locus, " ", causal_snp)) %>%
-        arrange(bp)
+    mutate(dir=ifelse(beta<0, "-", "+")) %>%
+    mutate(group=paste0(sub_locus, " ", snp)) %>%
+    arrange(bp)
 
   #### To delete - just for script developing sake
   #  fwrite(final,
@@ -998,8 +930,7 @@ final.plot <- function(locus,
     d[[i]] <- df
   }
   
-  d <- do.call(rbind, d) %>%
-    mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
+  d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
   
   gene.starts <- by(d$start,d$symbo,FUN = min)
   gene.end <- by(d$end,d$symbo,FUN = max)
@@ -1076,7 +1007,7 @@ final.plot <- function(locus,
     plot_grid(p1_legend,p3_legend, ncol=2),
     align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
   
-  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot_2.png"),
+  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
 
