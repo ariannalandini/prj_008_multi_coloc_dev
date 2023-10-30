@@ -164,8 +164,8 @@ dataset.munge=function(sumstats.file
 ### cojo.ht ###
 ### Performs --cojo-slct first to identify all indipendent SNPs and --cojo-cond then to condition upon identified SNPs
 cojo.ht=function(D=datasets[[1]]
-                 ,plink.bin="/project/alfredo/software/plink/1.90_20210606/plink"
-                 ,gcta.bin="/project/alfredo/software/GCTA/1.94.0beta/gcta64"
+                 ,plink.bin="/ssu/gassu/software/plink/2.00_20211217/plink2"
+                 ,gcta.bin="/ssu/gassu/software/GCTA/1.94.0beta/gcta64"
                  ,bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/p01_output/ukbb_all_30000_random_unrelated_white_british"
                  ,p.tresh=1e-4
                  ,maf.thresh=0.0001){
@@ -173,12 +173,12 @@ cojo.ht=function(D=datasets[[1]]
   random.number=stri_rand_strings(n=1, length=20, pattern = "[A-Za-z0-9]")
   
   write(D$snp,ncol=1,file=paste0(random.number,".snp.list"))
-  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --freqx --out ",random.number))
+  system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --geno-counts --out ",random.number))
   
-  freqs=fread(paste0(random.number,".frqx"))
-  freqs$FreqA1=(freqs$'C(HOM A1)'*2+freqs$'C(HET)')/(2*(rowSums(freqs[,c("C(HOM A1)", "C(HET)", "C(HOM A2)")])))
-  D$FREQ=freqs$FreqA1[match(D$snp,freqs$SNP)]
-  idx=which(D$a1!=freqs$A1)
+  freqs=fread(paste0(random.number,".gcount"))
+  freqs$FreqA1=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))
+  D$FREQ=freqs$FreqA1[match(D$snp,freqs$ID)]
+  idx=which(D$a1!=freqs$REF)
   D$FREQ[idx]=1-D$FREQ[idx]
   D$se=sqrt(D$varbeta)
 
