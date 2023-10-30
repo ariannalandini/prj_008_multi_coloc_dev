@@ -113,6 +113,7 @@ load_and_check_input <- function(opt, locus){
 }
 
 
+
 ### dataset.munge ###
 dataset.munge=function(sumstats.file
                         ,map=mappa.loc
@@ -294,7 +295,7 @@ cojo.ht=function(D=datasets[[1]]
   
   if(file.exists(paste0(random.number,"_step1.jma.cojo"))){
     ind.snp=fread(paste0(random.number,"_step1.jma.cojo")) %>%
-      left_join(D %>% select(SNP,type,any_of(c("sdY", "s"))), by="SNP")
+      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 
     dataset.list=list()
     dataset.list$ind.snps=ind.snp
@@ -354,6 +355,7 @@ cojo.ht=function(D=datasets[[1]]
 }
 
 
+
 ### plot.cojo.ht ###
 plot.cojo.ht=function(cojo.ht.obj){
 #  library(ggplot2)
@@ -394,6 +396,7 @@ plot.cojo.ht=function(cojo.ht.obj){
 }
 
 
+
 ### coloc.prep.table
 coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,mappa.loc){
   ### Select only 1) genome-wide significant or 2) with conditioned p-value < 1e-6 SNPs
@@ -418,6 +421,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,ma
   })))
   return(final.locus.table.tmp)
 }
+
 
 
 ### colo.cojo.ht ###
@@ -473,7 +477,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
-        colo.res <- coloc.abf(D1,D2)
+        colo.res <- coloc.abf.ht(D1,D2)
 ## Save coloc summary        
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
@@ -494,6 +498,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
   }
   return(coloc.final)
 }
+
 
 
 ### coloc.subgrouping 
@@ -521,6 +526,7 @@ coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp, col.order)
   final.locus.table.tmp=as.data.frame(final.locus.table.tmp)[,col.order]
   return(final.locus.table.tmp)
 } 
+
 
 
 ### coloc.plot ###
@@ -582,6 +588,7 @@ coloc.plot <- function(x, outpath=NULL){
 }
 
 
+
 ### p.minim ###
 p.minim=function(x)min(pchisq(as.numeric(unlist((dataset[[i]][x,6:ncol(dataset[[i]])]^2))),df=1,lower=F))
 minimiser=function(x){
@@ -590,6 +597,7 @@ minimiser=function(x){
   min(c(p1,p2))
   
 }
+
 
 
 ### locus.joyplot ###
@@ -630,10 +638,6 @@ locus.joyplot=function(x, window.size=10000, susie.res=susie.list){
 
 
 
-
-
-
-
 ### bin2lin2 ###
 bin2lin2=function (D, dotplot = FALSE){
   if (D$type != "cc") 
@@ -654,11 +658,7 @@ bin2lin2=function (D, dotplot = FALSE){
 
 
 
-
-
-
-
-
+### pleio.table ###
 pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot=FALSE,plot.file=NULL, index.trait=NULL){
   
 ## Remove duplicates
@@ -757,6 +757,7 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
 }
 
 
+
 #### package.loader - Load packages if available, install them first if not
 # Check if the package is already installed
 package.loader <- function(package_name){
@@ -770,6 +771,7 @@ package.loader <- function(package_name){
     library(package_name, character.only = TRUE)
   }
 }
+
 
 
 #### final.plot - Final summary plot function
@@ -787,7 +789,6 @@ final.plot <- function(locus,
               by=c("snp"="SNP","trait","cojo_snp"))
   }), fill=TRUE))
   
-
 # Add sublocus info to conditional dataset - keep only SNPs actually submitted to coloc
   loci_table <- full_df %>%
     right_join(final.locus.table.tmp %>% filter(flag=="keep") %>% select(sub_locus, trait, SNP),
@@ -868,10 +869,7 @@ final.plot <- function(locus,
       panel.grid.minor = element_blank()
     )
   
-  
-
 ### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
-  
   p2 <- ggplot(final %>% distinct(group, .keep_all=T), aes(x = bp)) +
     geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), color="black") +
     geom_segment(aes(y=0, yend=0.5, x=bp, xend=breaks), color="black") +
@@ -893,9 +891,7 @@ final.plot <- function(locus,
       panel.border = element_blank()
     )
   
-
 ### Plot 3 - gene annotation
-  
   # Retrieve info on the genes
   ref_genes <- genes(EnsDb.Hsapiens.v75)
   ref_genes <- ref_genes[ref_genes@elementMetadata$gene_biotype=='protein_coding',]
@@ -959,7 +955,6 @@ final.plot <- function(locus,
     names(lab.table) <- paste0("\n\n\n", names(lab.table))
   }
   
-  
   ### Gene position - doesn't make a lot of sense with the two strands
   p3 <- ggplot(g.table) +
     geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
@@ -1013,7 +1008,6 @@ final.plot <- function(locus,
 
 
 #################### Coloc functions modified to accept dataframes (and not only lists)
-
 
 #### coloc.abf.ht
 coloc.abf.ht <- function(dataset1, dataset2, MAF=NULL, 
