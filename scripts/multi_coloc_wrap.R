@@ -9,7 +9,9 @@
 source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 ### Load necessary packages, if not available install them first
-package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2","easyGgplot2","cowplot","igraph","RColorBrewer","ggnet","patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","purrr","dplyr")
+package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2",#"easyGgplot2",
+"cowplot","igraph","RColorBrewer",#"ggnet",
+"patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","purrr","dplyr")
 for(package in package_list){
   package.loader(package)
 }
@@ -17,7 +19,7 @@ for(package in package_list){
 
 option_list <- list(
   make_option("--input", type="character", default=NULL, 
-              help="Pan loci table created by the locuslister R function", metavar="character"),
+              help="Pan loci table created by the locuslister R function or provided by user", metavar="character"),
   make_option("--chr", type="character", default="CHROM",
               help="Name of chromosome column", metavar="integer"),
   make_option("--pos", type="character", default="GENPOS", 
@@ -40,10 +42,12 @@ option_list <- list(
               help="Name of p-value of effect column", metavar="character"),
   make_option("--output", type="character", default="./multi_coloc", 
               help="Path and name of output directory", metavar="character"),
-  make_option("--grch", type="integer", default=38, 
+  make_option("--grch", type="integer", default=NULL, 
               help="Genomic build of GWAS summary statistics", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character"),
+  make_option("--bfile", type="character", default=NULL,
+              help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character"),
   make_option("--save_inter_files", type="numeric", default=FALSE, 
               help="Whether to save intermediate datasets as R objects", metavar="character")
 ); 
@@ -54,110 +58,75 @@ opt = parse_args(opt_parser);
 ########### to delete
 #opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
 #opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
+#opt$grch=38
 ###########
 
-## Throw error message - munged GWAS summary statistics file MUST be provided!
-if(is.null(opt$input)){
-  stop("Please specify the file name and path of your pan loci table in --input option\n",
-    call.=FALSE)
-#  print_help(opt_parser)
+## Locus defined by array job
+locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+if(is.na(locus)){
+  stop("You need to use array jobs, as many as the number of your loci!\n", call.=FALSE)
 }
-  
+
+## Read in input loci table, perform checks, format
+loci.table.tmp <- load_and_check_input(opt, locus)
+locus.info <- loci.table.tmp
+#  n.table=c()  ### Who uses this?
+
 ## Create output folder
 system(paste0("mkdir -p ", opt$output, "/temporary"))
 system(paste0("mkdir -p ", opt$output, "/plots"))
 system(paste0("mkdir -p ", opt$output, "/results"))
-
-## Load-in pan locus table and sort by pan locus number
-loci.table <- fread(opt$input)
-
-# If pan locus tabel is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name - fix this
-if("pan_locus_name" %in% names(loci.table)){
-# Assign pan locus start/end to trait-specific locus start/end
-  loci.table <- loci.table %>% mutate(
-    start=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\2", pan_locus_name)),
-    end=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\3", pan_locus_name))
-  )
-}
-
-# If pan locus table is NOT produced through loci identification script, it will not report the pan_locus index - add it
-if(!("pan_locus" %in% names(loci.table))){
-
-# Takes forever!  
-#  loci.table <- loci.table %>%
-#    arrange(chr,start,end) %>%
-#    group_by(chr,start,end) %>%
-#    mutate(pan_locus2=group_indices())
-
-  loci.table <- loci.table %>% arrange(chr,start,end) %>% group_split(chr,start,end)
-  loci.table <- lapply(loci.table, function(x) as.data.frame(x))
-  for(i in 1:length(loci.table)){
-    loci.table[[i]] <- as.data.frame(loci.table[[i]]) %>% mutate(pan_locus=i)}
-  loci.table <- as.data.frame(rbindlist(loci.table))
-}
-
-### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
-loci.table <- loci.table %>% select(any_of(c("chr","start","end","trait","path","pan_locus","type","sdY","s"))) %>% distinct()
-
-## Locus defined by array job
-locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
+final.locus.table=c()  
+col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus","snp_original")
 
 ## Set HLA coordinates. See:
 # GRCh38 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38.p13
 # GRCh37 - https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh37
-
-# Set start and end of HLA locus 
-if(opt$grch==38){
+if(unique(loci.table.tmp$grch)==38){
   hla_start=28510120
   hla_end=33480577
 }
-if(opt$grch==37){
+if(unique(loci.table.tmp$grch)==37){
   hla_start=28477797
   hla_end=33448354
 }
 
 ## Identify loci falling in HLA region
+##### NB: This doesn't work when the locus spans the whole extension of HLA!!!!!
 hla_locus <- unique((
   loci.table %>%
     filter(chr==6) %>%
-    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>%
-    filter(flag==TRUE))$pan_locus)
-
+    mutate(flag=data.table::between(hla_start, start, end) | data.table::between(hla_end, start, end)) %>% filter(flag==TRUE))$pan_locus)
+  
 ## Don't run for HLA loci as cojo will take forever
 if(locus %in% hla_locus){
-  cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
-} else {
-
-## Define reference files for munging and cojo based on genomic build
-  if(opt$grch==38){
-    ## Reference map for munging
-    mappa <- fread("/ssu/bsssu/ghrc38_reference/ukbb_grch38_map.tsv") ## temporary location?
-    ## LD reference panel (30k random unrelated british UKBB)
-    bfile="/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british"
-  }
-  
-  if(opt$grch==37){
-    ## Reference map for munging
-    mappa <- fread("/ssu/bsssu/ghrc37_reference/UKBB_30k_map.tsv") ## temporary location?
-    ## LD reference panel (30k random unrelated british UKBB)
-    bfile="/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"
-  }
-  
-  
-## Set up starting input  
-  final.locus.table=c()  
-  col.order=c("trait","Chr","start","end","SNP","bp","refA","othA","freq","b","se","p","bJ","bJ_se","pJ","LD_r","n","pan.locus","sub_locus")
-  
-# Define genomic region
-  loci.table.tmp=loci.table[loci.table$pan_locus==locus,]
-  locus.info=loci.table.tmp
-  
+    cat("\nLocus falling in the HLA region, colocalization not performered - script stops here\n")
+} else { 
   start=min(loci.table.tmp$start)-100000
   end=max(loci.table.tmp$end)+100000
   chr=loci.table.tmp$chr[1]
-  mappa.loc=mappa[which(mappa$CHR==chr & mappa$BP>=start & mappa$BP<=end),]
-#  n.table=c()  ### Who uses this?
-  
+# Set universal mapping files (created by Edo, 1000genomes+HRC+TOPMed)
+  if(unique(loci.table.tmp$grch)==38){
+    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh38_sorted.tsv.gz"
+  }
+  if(unique(loci.table.tmp$grch)==37){
+    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh37_sorted.tsv.gz"
+  }
+  system(paste0("tabix -h ",mappa," chr",chr,":",start,"-",end," > ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
+# Load local map and format  
+  mappa.loc <- fread(paste0(opt$output, "/locus_",locus,"_mappa.loc.tsv"), data.table=F) %>%
+    select("#chromosome", contains(as.character(unique(loci.table.tmp$grch))))
+  names(mappa.loc) <- c("CHR","BP", "SNP")
+  system(paste0("rm ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
+# Format - DO WE REALLY NEED MAF?! Can we calculate it on the fly? - A bit tricky! Due to different SNP naming
+  mappa.loc <- mappa.loc %>%
+      mutate(
+        CHR=gsub("chr", "", CHR),
+        A1=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\1", SNP),
+        A2=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\2", SNP)
+      ) %>% select(SNP,CHR,BP,A1,A2)
+  mappa.loc$CHR <- as.numeric(mappa.loc$CHR)
+
   cat("\nAll set and ready to start!\n")
 
 ## Munge files
@@ -183,17 +152,30 @@ if(locus %in% hla_locus){
   names(datasets) <- unique(loci.table.tmp$trait)
   cat("\nGWAS summary statistics succesfully munged\n")
   
+<<<<<<< scripts/multi_coloc_wrap.R
   if(opt$save_inter_files==TRUE){
     saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
 #    datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
   }  
 
+=======
+############################################################## To delete (?)
+# saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
+# datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
+############################################################## 
+  
+>>>>>>> scripts/multi_coloc_wrap.R
 # Perform cojo
   conditional.datasets=list()
   max.loci=1
   
   for(i in 1:length(datasets)){
-    tmp=cojo.ht(D=datasets[[i]], p.tresh=1e-4, maf.thresh=opt$maf, bfile=bfile)
+    tmp=cojo.ht(
+      D=datasets[[i]]
+      , p.tresh=1e-4
+      , maf.thresh=opt$maf
+      , bfile=loci.table.tmp$bfile[[i]]
+    )
     if(!is.null(tmp)){
       conditional.datasets[[i]]=tmp
       names(conditional.datasets)[i]=names(datasets)[i]
@@ -213,6 +195,39 @@ if(locus %in% hla_locus){
       saveRDS(conditional.datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
 #      conditional.datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_conditional.datasets.rds"))
     }
+    
+
+##################################################### ON GOING
+#### Re-run locus breaker step to reduce conditioned loci extension ###
+    
+# Extract only conditioned results part of conditional datasets  
+#  data_res <- unlist(conditional.datasets, recursive=F)
+#  data_res <- data_res[grep("results", names(data_res))]
+#  data_res <- unlist(data_res, recursive=F)
+#  data_res <- lapply(data_res, function(x) x%>% mutate(pvalues=ifelse(!is.na(pC), pC, p)))
+
+#  source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
+#  test <- lapply(data_res, function(x){
+#      locus.breaker(x,
+#                p.sig=5e-08,
+#                p.limit=1e-05,
+#                hole.size=250000,
+#                p.label="pvalues",
+#                chr.label="Chr",
+#                pos.label="bp")
+#    })
+#    names(test) <- names(data_res) ### Necessary?
+
+### PROBLEM - why multiple loci found by locus.breaker AFTER cojo cond? ###
+### Cojo does not identify ALL independent SNPs?!
+### Need to match test with conditional.datasets$indsnp also!!
+
+#    for(i in 1:length(data_sub)){
+#      data_sub[[i]] <- data_sub[[i]]
+#    }
+#####################################################    
+    
+
     
   # Plot of all independent associations for each trait
     pdf(paste0(opt$output, "/plots/locus_", locus, "_conditioned_loci.pdf"), height=3.5*max.loci, width=10)
@@ -357,8 +372,10 @@ if(locus %in% hla_locus){
         sub.loci=sort(unique(final.locus.table.tmp$sub_locus))
         
         for(i in sub.loci){
-            tmp=pleio.table(conditional.datasets = conditional.datasets,
-                            loc.table = final.locus.table.tmp[final.locus.table.tmp$sub_locus==i,])
+            tmp=pleio.table(
+              conditional.datasets = conditional.datasets,
+              loc.table = final.locus.table.tmp[final.locus.table.tmp$sub_locus==i,]
+            )
             tmp$sublocus=i
             pleio.all=rbind(pleio.all,tmp)
         }
@@ -369,6 +386,7 @@ if(locus %in% hla_locus){
         pleio.all$Z=pleio.all$b/pleio.all$se
         pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
         
+<<<<<<< scripts/multi_coloc_wrap.R
         pleio.all <- as.data.frame(pleio.all %>%
           group_by(SNP,trait) %>%
           mutate(Z=mean(Z), Z_scaled=mean(Z_scaled)) %>%
@@ -382,6 +400,10 @@ if(locus %in% hla_locus){
 
         a <- pleio.all %>% select(-Z_scaled) %>% spread(trait, Z)
         a[is.na(a)] <- 0
+=======
+##### Raw Z-scores        
+        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
+>>>>>>> scripts/multi_coloc_wrap.R
         row.names(a)=a$SNP
                 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table.pdf"),
@@ -396,8 +418,12 @@ if(locus %in% hla_locus){
         dev.off()
 
 ##### Scaled Z-scores
+<<<<<<< scripts/multi_coloc_wrap.R
         a2 <- pleio.all %>% select(-Z) %>% spread(trait, Z_scaled)
         a2[is.na(a2)] <- 0
+=======
+        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
+>>>>>>> scripts/multi_coloc_wrap.R
         row.names(a2)=a2$SNP
 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
@@ -410,10 +436,15 @@ if(locus %in% hla_locus){
           col=COL2('RdBu', 200),
           col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
         dev.off()
+<<<<<<< scripts/multi_coloc_wrap.R
 
+=======
+  
+     
+>>>>>>> scripts/multi_coloc_wrap.R
   ### Plot coloc
         coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
-      }else{
+      } else {
         idx=which(is.na(final.locus.table.tmp$sub_locus))
         pri=1
         final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
@@ -432,11 +463,17 @@ if(locus %in% hla_locus){
   ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
         colocalization.table.H4 <- final.colocs.H4 %>%
-          inner_join(final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag),
+          inner_join(
+            final.locus.table.tmp %>%
+              select(SNP, trait, sub_locus, flag,snp_original)%>%
+              rename(hit1_original=snp_original),
           by=c("t1"="trait", "hit1"="SNP", "g1"="sub_locus")
           , multiple = "all"
         ) %>%
-        inner_join(final.locus.table.tmp %>% select(SNP, trait, sub_locus, flag),
+        inner_join(
+          final.locus.table.tmp %>%
+            select(SNP, trait, sub_locus, flag, snp_original) %>%
+            rename(hit2_original=snp_original),
           by=c("t2"="trait", "hit2"="SNP", "g1"="sub_locus")
           ,multiple = "all"
         ) 

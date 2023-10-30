@@ -15,6 +15,104 @@
 #suppressMessages(library(dplyr))
 
 
+### load_and_check_input ###
+load_and_check_input <- function(opt, locus){
+## Throw error message - munged GWAS summary statistics file MUST be provided!
+  if(is.null(opt$input)){
+    stop("Please specify the file name and path of your pan loci table in --input option\n", call.=FALSE)
+    #  print_help(opt_parser)
+  } 
+## Load-in pan locus table
+  loci.table <- fread(opt$input)
+
+## Check that the strictly required info are present in the loci table    
+  minimal_info <- c("chr","start","end","path","trait","type")
+  if(any(minimal_info %in% names(loci.table))==FALSE){
+    stop(c("The following mandatory columns are missing from the loci table specified:\n", setdiff(minimal_info, names(loci.table))), call.=FALSE)
+  }
+
+# If pan locus table is produced through loci identification script, it will report the start and the end of the pan locus ONLY in the pan locus name - fix this
+  if("pan_locus_name" %in% names(loci.table)){
+    # Assign pan locus start/end to trait-specific locus start/end
+    loci.table <- loci.table %>% mutate(
+      start=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\2", pan_locus_name)),
+      end=as.numeric(gsub("(\\d+)_(\\d+)_(\\d+)", "\\3", pan_locus_name))
+    )
+  }
+# If pan locus table is NOT produced through loci identification script, it will not report the pan_locus index - add it
+  if(!("pan_locus" %in% names(loci.table))){
+    # Takes forever!  
+    #  loci.table <- loci.table %>%
+    #    arrange(chr,start,end) %>%
+    #    group_by(chr,start,end) %>%
+    #    mutate(pan_locus2=group_indices())
+    loci.table <- loci.table %>% arrange(chr,start,end) %>% group_split(chr,start,end)
+    loci.table <- lapply(loci.table, function(x) as.data.frame(x))
+    for(i in 1:length(loci.table)){
+      loci.table[[i]] <- as.data.frame(loci.table[[i]]) %>% mutate(pan_locus=i)}
+    loci.table <- as.data.frame(rbindlist(loci.table))
+  }
+  
+# Define genomic region
+  loci.table.tmp <- loci.table %>% filter(pan_locus==locus)
+
+  ## Check that strictly required info are not NA
+  if(any(is.na(loci.table.tmp %>% select(all_of(minimal_info))))){
+    stop(c("NA are not allowed in the following columns:\n", minimal_info), call.=FALSE)
+  }
+  
+## Make sure genomic build (grch) info is provided
+  if(is.null(opt$grch) & is.null(loci.table.tmp$grch)){
+    stop("Please specify the genomic build either using the --grch option or adding a grch in your input loci table\n", call.=FALSE)
+  }
+  if(is.null(opt$grch) & !is.null(loci.table.tmp$grch) & any(is.na(loci.table.tmp$grch))){
+    stop("Please specify the genomic build either using the --grch option or adding a grch in your input loci table\n", call.=FALSE)
+  }
+  if(!is.null(opt$grch) & is.null(loci.table.tmp$grch)){
+    loci.table.tmp <- loci.table.tmp %>% mutate(grch=opt$grch)
+  }
+  if(!is.null(opt$grch) & !is.null(loci.table.tmp$grch) & any(is.na(loci.table.tmp$grch))){
+    loci.table.tmp <- loci.table.tmp %>% mutate(grch=ifelse(is.na(grch), opt$grch,grch))
+  }
+  if(!(unique(loci.table.tmp$grch) %in% c(37,38))){
+    stop("Sorry but we support only GRCh 37 and 38 at the moment!\n", call.=FALSE)
+  }
+## NB: all traits in the same locus MUST be in the same build! Otherwise, how could you define the start and end of the locus??
+  if(length(unique(loci.table.tmp$grch))>1){
+    stop("All traits having an association in the same locus MUST have the same build!\n", call.=FALSE)
+  }
+## If custom LD reference bfiles are not provided (either in input loci table or as argument), assign UKBB one
+  if(is.null(opt$bfile) & is.null(loci.table.tmp$bfile)){
+    print("Warning: since no custom LD reference was provided, defualt UKBB one will be used\n")
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(grch==38, 
+      "/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british",
+      "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"))
+    }
+  if(is.null(opt$bfile) & !is.null(loci.table.tmp$bfile) & any(is.na(loci.table.tmp$bfile))){
+    print("Warning: since no custom LD reference was provided for some traits, defualt UKBB one will be used for those\n")
+      loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(is.na(bfile), 
+        ifelse(grch==38, "/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british", "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"), bfile))
+  }
+  if(!is.null(opt$bfile) & is.null(loci.table.tmp$bfile)){
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=opt$bfile)
+  }
+  if(!is.null(opt$bfile) & !is.null(loci.table.tmp$bfile) & any(is.na(loci.table.tmp$bfile))){
+    loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(is.na(bfile), opt$bfile, bfile))
+  }
+
+### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
+  loci.table.tmp <- loci.table.tmp %>% select(all_of(minimal_info), "pan_locus", "grch", "bfile", any_of(c("sdY","s"))) %>% distinct()
+  
+# Check tyoe column  
+  ### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
+  if(!(unique(loci.table.tmp$type) %in% c("cc", "quant"))){
+    stop("Type has been defined incorrectly - it has to be either 'cc' or 'quant'", call.=FALSE)
+  }
+  return(loci.table.tmp)
+  cat("\nInput check performed!\n")
+}
+
+
 ### dataset.munge ###
 dataset.munge=function(sumstats.file
                         ,map=mappa.loc
@@ -57,19 +155,10 @@ dataset.munge=function(sumstats.file
     stop("snp.lab has not been defined or the column is missing")
   }
 
-### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
-  if(exists("type")){
-    if(type=="cc" | type=="quant"){
-      dataset <- dataset %>% mutate(type=type)
-    } else {
-    stop("Type has not been defined or has been defined incorrectly - it has to be either 'cc' or 'quant'")
-    }
-  }
- 
-#### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only. Add also alleles info to avoid losing too many SNPs in merging
+#### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only
 
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
-  dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
+# dataset$SNP <- gsub("(.*)_\\w+_\\w+$", "\\1", dataset$SNP)
 #####
   
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
@@ -87,7 +176,11 @@ dataset.munge=function(sumstats.file
   if(!is.null(freq.lab) & freq.lab%in%names(dataset)){
     names(dataset)[names(dataset)==freq.lab]="FRQ"
   }else{
-    dataset$FRQ=map$MAF[match(dataset$SNP,map$SNP)]
+#    dataset$FRQ=map$MAF[match(dataset$SNP,map$SNP)]
+    stop("For the moment, frequency of effect allele MUST be provided in the GWAS summary statistics!\n", call.=FALSE)
+  
+### You should be able to calculate frequency from the bfiles provided (either default or custom). PROBLEM is that at this stage the SNP ids of GWAS and bfiles are still not matching! bfiles ones in fact should be the same of the map
+### Find a way to fix this!    
   }
   
   if("FRQ" %in% colnames(dataset)){
@@ -114,55 +207,67 @@ dataset.munge=function(sumstats.file
 # Add variance of beta  
   dataset$varbeta=dataset$SE^2
   
-# Add sdY/s
-  if(type=="cc" && !(is.null(s))){
+# Add type and sdY/s
+  dataset$type <- type
+  if(type=="cc" & !(is.null(s))){
     dataset$s=s
   } else if(type=="cc" && is.null(s)){
     #### Is this correct?? Is "s" strictly necessary for cc traits??
     stop("Please provide s, the proportion of samples who are cases")
   }
 
-  if(type=="quant" && !(is.null(sdY)) && !is.na(sdY)){
+  if(type=="quant" & !(is.null(sdY)) & !is.na(sdY)){
     dataset$sdY <- sdY
-  } else if(type=="quant" && (is.null(sdY) | is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
-    dataset$sdY <- sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
+  } else if(type=="quant" & (is.null(sdY) | is.na(sdY))){ #### Gives back "logical(0)" - FIX!! Append sdY to the dataset table, even if null
+    dataset$sdY <- coloc:::sdY.est(dataset$varbeta, dataset$MAF, dataset$N)
   }
   
+## Match with locus reference map
+#  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
+#  dataset <- dataset[match(map$SNP,dataset$SNP),]
+  dataset <- dataset %>%
+    filter(
+      CHR==unique(mappa.loc$CHR),
+      BP >= min(mappa.loc$BP, na.rm=T) & BP <= max(mappa.loc$BP, na.rm=T)
+    )
 
-# Match with locus reference map
-  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
-  dataset <- dataset[match(map$SNP,dataset$SNP),]
-  
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
-  names(map)=c("rsid","chr","pos","maf","a1","a0")
-
+#  names(map)=c("rsid","chr","pos","maf","a1","a0") ### Do we really need to provid MAF?!
+  names(map)=c("rsid","chr","pos","a1","a0")
+  
   flip.t=snp_match(sumstats=flip,
                    info_snp=map,
-                   join_by_pos=FALSE,
+#                   join_by_pos=FALSE,
+                   join_by_pos=TRUE,
                    strand_flip=FALSE,
                    match.min.prop=0)
     
-  dataset=dataset[match(flip.t$rsid,dataset$SNP),]
+  #dataset=dataset[match(flip.t$rsid,dataset$SNP),]
+  dataset <- dataset[flip.t$`_NUM_ID_.ss`]
+
+# Keep both original and map SNP id
+  dataset$snp_map <- flip.t$rsid
   dataset$A1=flip.t$a1
   dataset$A2=flip.t$a0
-  dataset$BETA=flip.t$beta
-  
+  dataset$b=flip.t$beta
+
   if(type=="cc"){
     dataset <- dataset %>%
-      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","s")
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","s")
+      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","s") %>%
+      rename(se=SE, p=P)
   } else if(type=="quant"){
     dataset <- dataset %>%
-      select("SNP","CHR","BP","A1","A2","BETA","varbeta","P","MAF","N","type","sdY")
-    names(dataset)=c("snp","chr","pos","a1","a0","beta","varbeta","pvalues","MAF","N","type","sdY")
+      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","sdY") %>%
+      rename(se=SE, p=P)
   }
   dataset
 }
 
 
+
 ### cojo.ht ###
-### Performs --cojo-slct first to identify all indipendent SNPs and --cojo-cond then to condition upon identified SNPs
+### Performs --cojo-slct first to identify all independent SNPs and --cojo-cond then to condition upon identified SNPs
 cojo.ht=function(D=datasets[[1]]
                  ,plink.bin="/ssu/gassu/software/plink/2.00_20211217/plink2"
                  ,gcta.bin="/ssu/gassu/software/GCTA/1.94.0beta/gcta64"
@@ -176,16 +281,12 @@ cojo.ht=function(D=datasets[[1]]
   system(paste0(plink.bin," --bfile ",bfile," --extract ",random.number,".snp.list --maf ", maf.thresh, " --make-bed --geno-counts --out ",random.number))
   
   freqs=fread(paste0(random.number,".gcount"))
-  freqs$FreqA1=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))
+  freqs$FreqA1=(freqs$HOM_REF_CT*2+freqs$HET_REF_ALT_CTS)/(2*(rowSums(freqs[,c("HOM_REF_CT", "HET_REF_ALT_CTS", "TWO_ALT_GENO_CTS")])))  #### Why doing all this when plink can directly calculate it with --frq?
   D$FREQ=freqs$FreqA1[match(D$snp,freqs$ID)]
   idx=which(D$a1!=freqs$REF)
   D$FREQ[idx]=1-D$FREQ[idx]
-  D$se=sqrt(D$varbeta)
-
-  D <- D %>%
-    select("snp","a1","a0","FREQ","beta","se","pvalues","N","type", any_of(c("sdY","s"))) %>%
-    rename("SNP"="snp","A1"="a1","A2"="a0","freq"="FREQ","b"="beta","p"="pvalues")
-  
+#  D$se=sqrt(D$varbeta) # why not keeping se from the munging? se is anyway required to calculate varbeta
+  D <- D %>% select("SNP","A1","A2","freq","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
 
 # step1 determine independent snps
@@ -222,11 +323,11 @@ cojo.ht=function(D=datasets[[1]]
       
 ############
 
-# Re-add type and sdY/s info
+# Re-add type and sdY/s info, and map SNPs!
         step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-          left_join(D %>% select(SNP,type,any_of(c("sdY", "s"))), by="SNP")
+          left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
         dataset.list$results[[i]]=step2.res
-        names(dataset.list$results)[i]=ind.snp$SNP[i]
+        names(dataset.list$results)[i]=ind.snp$snp_map[i]
       }
     
     } else {
@@ -234,9 +335,9 @@ cojo.ht=function(D=datasets[[1]]
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
     write(ind.snp$SNP[1],ncol=1,file=paste0(random.number,"_independent.snp"))
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
-    step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE)  %>%
-      left_join(D %>% select(SNP,type,any_of(c("sdY", "s"))), by="SNP")
 
+    step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 
 #### Add back top SNP, removed from the data frame with the conditioning step
     step2.res <- rbind.fill(step2.res, ind.snp %>% select(-bJ,-bJ_se,-pJ,-LD_r))
@@ -245,7 +346,7 @@ cojo.ht=function(D=datasets[[1]]
     step2.res$pC <- NA
 
     dataset.list$results[[1]]=step2.res
-    names(dataset.list$results)[1]=ind.snp$SNP[1]
+    names(dataset.list$results)[1]=ind.snp$snp_map[1]
     }
   }
   system(paste0("rm *",random.number,"*"))
@@ -264,14 +365,15 @@ plot.cojo.ht=function(cojo.ht.obj){
     for(i in 1:nrow(cojo.ht.obj$ind.snps)){
       
       tmp=cojo.ht.obj$results[[i]]
-      tmp$signal=cojo.ht.obj$ind.snps$SNP[i]
+      tmp$signal=cojo.ht.obj$ind.snps$snp_map[i]
       whole.dataset=rbind(whole.dataset,tmp)
     }
     
     p1 <- ggplot(cojo.ht.obj$results[[i]], aes(x=bp,y=-log10(p))) +
       geom_point(alpha=0.6,size=3)+
       theme_minimal()+
-      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=SNP),size=6,shape=23)
+      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=snp_map),size=6,shape=23) +
+      guides(fill=guide_legend(title="SNP"))
     
     p2 <- ggplot(whole.dataset,aes(x=bp,y=-log10(pC),color=signal)) +
       facet_grid(signal~.) +
@@ -281,12 +383,12 @@ plot.cojo.ht=function(cojo.ht.obj){
     
     p3 <- p1/p2 + plot_layout(heights = c(1, nrow(cojo.ht.obj$ind.snps)+0.2))
     
-  }else{
+  } else {
     
     p3 <- ggplot(cojo.ht.obj$results[[1]], aes(x=bp,y=-log10(p))) +
       geom_point(alpha=0.6,size=3)+
       theme_minimal()+
-      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=SNP),size=6,shape=23)
+      geom_point(data=cojo.ht.obj$ind.snps,aes(x=bp,y=-log10(p),fill=snp_map),size=6,shape=23)
   }
   (p3)
 }
@@ -297,7 +399,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,ma
   ### Select only 1) genome-wide significant or 2) with conditioned p-value < 1e-6 SNPs
   final.locus.table.tmp <- as.data.frame(rbindlist(lapply(names(conditional.datasets), function(x){
     tmp <- conditional.datasets[[x]]$ind.snps
-#    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)} # BUT WHT?! Anyway filtering later and here is fucking up everything
+#    if(nrow(tmp)>1){tmp <- tmp %>% filter(p<5e-8 | pJ<1e-6)} # BUT WHY?! Anyway filtering later and here is fucking up everything
     tmp <- tmp %>%
       mutate(
         start=unique(loci.table.tmp$start),
@@ -309,7 +411,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,ma
       )
     ### Add other allele from map    
     for(n in 1:nrow(tmp)){
-      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$SNP[n],c("A1","A2")]) ### NO MATCH! BECAUSE MAP SNPS AND GWAS SNPS ARE NOT MATCHING!
+      alleles=unlist(mappa.loc[mappa.loc$SNP==tmp$snp_map[n],c("A1","A2")])
       tmp$othA[n]=alleles[!(alleles%in%tmp$refA[n])]
     }
     tmp
@@ -326,16 +428,16 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
   
   if(length(grep("pJ",names(conditional.dataset1$ind.snps)))>0){
     
-    hits.t1=conditional.dataset1$ind.snps$SNP[conditional.dataset1$ind.snps$pJ<p.threshold.cond | conditional.dataset1$ind.snps$p <p.threshold.orig]
+    hits.t1=conditional.dataset1$ind.snps$snp_map[conditional.dataset1$ind.snps$pJ<p.threshold.cond | conditional.dataset1$ind.snps$p <p.threshold.orig]
   }else{
-    hits.t1=conditional.dataset1$ind.snps$SNP
+    hits.t1=conditional.dataset1$ind.snps$snp_map
   }
   
   if(length(grep("pJ",names(conditional.dataset2$ind.snps)))>0){
     
-    hits.t2=conditional.dataset2$ind.snps$SNP[conditional.dataset2$ind.snps$pJ<p.threshold.cond | conditional.dataset2$ind.snps$p<p.threshold.orig]
+    hits.t2=conditional.dataset2$ind.snps$snp_map[conditional.dataset2$ind.snps$pJ<p.threshold.cond | conditional.dataset2$ind.snps$p<p.threshold.orig]
   }else{
-    hits.t2=conditional.dataset2$ind.snps$SNP
+    hits.t2=conditional.dataset2$ind.snps$hits.t2
   }
   
   if(length(hits.t2)>0 & length(hits.t1)>0){
@@ -349,24 +451,24 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         
         if(any(!is.na(D1$bC))){
           D1 <- D1 %>%
-            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
-        }else{
+            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
+        } else {
           D1 <- D1 %>%
-            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D1$varbeta=D1$varbeta^2
         D1=na.omit(D1)
         
         if(any(!is.na(D2$bC))){
           D2 <- D2 %>%
-            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
+            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
         }else{
           D2 <- D2 %>%
-            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
@@ -376,7 +478,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
         colo.sum$hit2=j
-#        coloc.summary=rbind(coloc.summary,colo.sum)
+#       coloc.summary=rbind(coloc.summary,colo.sum)
 
 ## Save coloc result by SNP
         colo.full_res <- colo.res$results %>% 
@@ -395,17 +497,17 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
 
 
 ### coloc.subgrouping 
-coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp,col.order){
+coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp, col.order){
   # Add sublocus to locus table
   for(k in 1:nrow(final.colocs.H4)){
     
     final.locus.table.tmp$sub_locus[
       final.locus.table.tmp$trait==final.colocs.H4$t1[k] &
-        final.locus.table.tmp$SNP==final.colocs.H4$hit1[k]]=final.colocs.H4$g1[k]
+        final.locus.table.tmp$snp_map==final.colocs.H4$hit1[k]]=final.colocs.H4$g1[k]
     
     final.locus.table.tmp$sub_locus[
       final.locus.table.tmp$trait==final.colocs.H4$t2[k] &
-        final.locus.table.tmp$SNP==final.colocs.H4$hit2[k]]=final.colocs.H4$g1[k]
+        final.locus.table.tmp$snp_map==final.colocs.H4$hit2[k]]=final.colocs.H4$g1[k]
   }
   
   # Add sublocus also for non-colocalising loci
@@ -415,6 +517,7 @@ coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp,col.order){
     final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
   }
   
+  final.locus.table.tmp <- final.locus.table.tmp %>% rename(snp_original=SNP, SNP=snp_map)
   final.locus.table.tmp=as.data.frame(final.locus.table.tmp)[,col.order]
   return(final.locus.table.tmp)
 } 
@@ -435,12 +538,9 @@ coloc.plot <- function(x, outpath=NULL){
       tmp$group=x$g1[i]
       
       if(any(!is.na(tmp$pC))){
-        
         tmp=tmp[,c("bp","pC","label","group")]
         names(tmp)=c("bp","p","label","group")
-        
       } else {
-        
         tmp=tmp[,c("bp","p","label","group")]
       }  
       
@@ -450,7 +550,6 @@ coloc.plot <- function(x, outpath=NULL){
       tmp$group=x$g1[i]
       
       if(any(!is.na(tmp$pC))){
-        
         tmp=tmp[,c("bp","pC","label","group")]
         names(tmp)=c("bp","p","label","group")
       } else {
@@ -460,7 +559,6 @@ coloc.plot <- function(x, outpath=NULL){
       per.plot.data=rbind(per.plot.data,tmp)
       per.plot.data=per.plot.data[order(per.plot.data$group),]
       per.plot.data$label=factor(per.plot.data$label,levels=unique(per.plot.data$label))
-      
       x$locus=locus
     }
     
@@ -563,8 +661,7 @@ bin2lin2=function (D, dotplot = FALSE){
 
 pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot=FALSE,plot.file=NULL, index.trait=NULL){
   
-  
-  ## Remove duplicates
+## Remove duplicates
   duplicati=table(loc.table$trait)
   if(any(duplicati>1)){
     doppi=names(duplicati)[duplicati>1]
@@ -574,9 +671,7 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
       min.snp=tmp$SNP[which.min(tmp$pJ)]
       loc.table=loc.table[which(loc.table$trait!=i | (loc.table$trait==i & loc.table$SNP==min.snp)),]
     }
-    
   }
-  
   
   if(nrow(loc.table)>1){
     for(i in 1:nrow(loc.table)){
@@ -585,38 +680,34 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
         merged.datasets=conditional.datasets[[loc.table$trait[i]]]$results[[loc.table$SNP[i]]]
         
         if(any(!is.na(merged.datasets$bC))){
-          merged.datasets=merged.datasets[,c("SNP","bC","bC_se","pC","n")]
+          merged.datasets=merged.datasets[,c("snp_map","bC","bC_se","pC","n")]
           names(merged.datasets)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
-        }else{
-          merged.datasets=merged.datasets[,c("SNP","b","se","p","n")]
+        } else {
+          merged.datasets=merged.datasets[,c("snp_map","b","se","p","n")]
           names(merged.datasets)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
         }
         
-        
-      }else{
+      } else {
         
         merged.datasets2=conditional.datasets[[loc.table$trait[i]]]$results[[loc.table$SNP[i]]]
         
         if(any(!is.na(merged.datasets2$bC))){
-          merged.datasets2=merged.datasets2[,c("SNP","bC","bC_se","pC","n")]
-          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
-        }else{
-          merged.datasets2=merged.datasets2[,c("SNP","b","se","p","n")]
+          merged.datasets2=merged.datasets2[,c("snp_map","bC","bC_se","pC","n")]
+          names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","N"),loc.table$trait[i],sep=".."))
+        } else {
+          merged.datasets2=merged.datasets2[,c("snp_map","b","se","p","n")]
           names(merged.datasets2)=c("SNP",paste(c("beta","se","pval","n"),loc.table$trait[i],sep=".."))
         }
         merged.datasets=merge(merged.datasets,merged.datasets2,by="SNP",all = FALSE,suffixes =c(""))
-        
       }
-      
     }
     
     merged.datasets=na.omit(merged.datasets)
     if(is.null(index.trait)){
-      
       top.snp=as.data.frame(merged.datasets[which.min(apply(merged.datasets[,grep("pval..",names(merged.datasets))],1,min)),])
-    }else if (length(grep(index.trait,names(merged.datasets)))==0){
+    } else if (length(grep(index.trait,names(merged.datasets)))==0){
       top.snp=as.data.frame(merged.datasets[which.min(apply(merged.datasets[,grep("pval..",names(merged.datasets))],1,min)),])
-    }else{
+    } else {
       top.snp=as.data.frame(merged.datasets[which.min(merged.datasets[,paste0("pval..",index.trait)]),])
     }
     
@@ -625,6 +716,7 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
     
     top.snp$variable=matric[,1]
     top.snp$trait=matric[,2]
+    
     if(plot==TRUE){
      
       mappa=conditional.datasets[[1]]$results[[1]][,c("SNP","bp")]
@@ -643,15 +735,15 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
       dev.off()
     }
     
-  }else{
+  } else {
     
     merged.datasets=conditional.datasets[[loc.table$trait[1]]]$results[[loc.table$SNP[1]]]
     
     if(any(!is.na(merged.datasets$bC))){
-      merged.datasets=merged.datasets[,c("SNP","bC","bC_se","pC","n")]
+      merged.datasets=merged.datasets[,c("snp_map","bC","bC_se","pC","n")]
       names(merged.datasets)=c("SNP","beta","se","pval","n")
-    }else{
-      merged.datasets=merged.datasets[,c("SNP","b","se","p","n")]
+    } else {
+      merged.datasets=merged.datasets[,c("snp_map","b","se","p","n")]
       names(merged.datasets)=c("SNP","beta","se","pval","n")
     }
     top.snp=merged.datasets[which.min(merged.datasets$p),]
@@ -662,32 +754,6 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
     top.snp$trait=matric[,2]
   }
   top.snp
-}
-
-
-## Taken from coloc package https://github.com/chr1swallace/coloc/blob/HEAD/R/claudia.R
-##' Estimate trait standard deviation given vectors of variance of coefficients,  MAF and sample size
-##'
-##' Estimate is based on var(beta-hat) = var(Y) / (n * var(X))
-##' var(X) = 2*maf*(1-maf)
-##' so we can estimate var(Y) by regressing n*var(X) against 1/var(beta)
-##' 
-##' @title Estimate trait variance, internal function
-##' @param vbeta vector of variance of coefficients
-##' @param maf vector of MAF (same length as vbeta)
-##' @param n sample size
-##' @return estimated standard deviation of Y
-##' 
-##' @author Chris Wallace
-sdY.est <- function(vbeta, maf, n) {
-  warning("estimating sdY from maf and varbeta, please directly supply sdY if known")
-  oneover <- 1/vbeta
-  nvx <- 2 * n * maf * (1-maf)
-  m <- lm(nvx ~ oneover - 1)
-  cf <- coef(m)[['oneover']]
-  if(cf < 0)
-    stop("estimated sdY is negative - this can happen with small datasets, or those with errors.  A reasonable estimate of sdY is required to continue.")
-  return(sqrt(cf))
 }
 
 
@@ -944,3 +1010,170 @@ final.plot <- function(locus,
   ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
+
+
+#################### Coloc functions modified to accept dataframes (and not only lists)
+
+
+#### coloc.abf.ht
+coloc.abf.ht <- function(dataset1, dataset2, MAF=NULL, 
+                         p1=1e-4, p2=1e-4, p12=1e-5) {
+  
+  if(!("MAF" %in% names(dataset1)) & !is.null(MAF))
+    dataset1$MAF <- MAF
+  if(!("MAF" %in% names(dataset2)) & !is.null(MAF))
+    dataset2$MAF <- MAF
+  check_dataset.ht(d=dataset1,1)
+  check_dataset.ht(d=dataset2,2)
+  
+  df1 <- process.dataset.ht(d=dataset1, suffix="df1")
+  df2 <- process.dataset.ht(d=dataset2, suffix="df2")
+  merged.df <- merge(df1,df2)
+
+  if(!nrow(merged.df))
+    stop("dataset1 and dataset2 should contain the same snps in the same order, or should contain snp names through which the common snps can be identified")
+  
+  merged.df$internal.sum.lABF <- with(merged.df, lABF.df1 + lABF.df2)
+  my.denom.log.abf <- coloc:::logsum(merged.df$internal.sum.lABF)
+  merged.df$SNP.PP.H4 <- exp(merged.df$internal.sum.lABF - my.denom.log.abf)
+  
+  pp.abf <- coloc:::combine.abf(merged.df$lABF.df1, merged.df$lABF.df2, p1, p2, p12)  
+  common.snps <- nrow(merged.df)
+  results <- c(nsnps=common.snps, pp.abf)
+  
+  output<-list(summary=results,
+               results=merged.df,
+               priors=c(p1=p1,p2=p2,p12=p12))
+  class(output) <- c("coloc_abf",class(output))
+  return(output)
+}
+
+
+#### check_dataset.ht
+check_dataset.ht <- function (d, suffix = "", req = c("snp"), warn.minp = 1e-06) 
+{
+  if (!is.list(d)) 
+    stop("dataset ", suffix, ": is not a list")
+  nd <- names(d)
+  n <- 0
+  for (v in nd) {
+    if (v %in% req && !(v %in% nd)) 
+      stop("dataset ", suffix, ": missing required element ", 
+           v)
+    if (any(is.na(d[[v]]))) 
+      stop("dataset ", suffix, ": ", v, " contains missing values")
+  }
+  if ("snp" %in% nd && any(duplicated(d$snp))) 
+    stop("dataset ", suffix, ": duplicated snps found")
+  if ("snp" %in% nd && is.factor(d$snp)) 
+    stop("dataset ", suffix, ": snp should be a character vector but is a factor")
+  if ("MAF" %in% nd && (!is.numeric(d$MAF) || any(is.na(d$MAF)) || 
+                        any(d$MAF <= 0) || any(d$MAF >= 1))) 
+    stop("dataset ", suffix, ": MAF should be a numeric, strictly >0 & <1")
+  l <- -1
+  shouldmatch <- c("pvalues", "MAF", "beta", "varbeta", "snp", 
+                   "position")
+  for (v in shouldmatch) if (v %in% nd) 
+    if (l < 0) {
+      l <- length(d[[v]])
+    }
+  else {
+    if (length(d[[v]]) != l) {
+      stop("dataset ", suffix, ": lengths of inputs don't match: ")
+      print(intersect(nd, shouldmatch))
+    }
+  }
+  if (("N" %in% req) && (!("N" %in% nd) || is.null(d$N) || 
+                         is.na(d$N))) 
+    stop("dataset ", suffix, ": sample size N not set")
+  if (!("type" %in% nd)) 
+    stop("dataset ", suffix, ": variable type not set")
+  if (!(d$type[[1]] %in% c("quant", "cc"))) 
+    stop("dataset ", suffix, ": ", "type must be quant or cc")
+  if (("s" %in% nd) && (!is.numeric(d$s) || d$s <= 0 || d$s >= 
+                        1)) 
+    stop("dataset ", suffix, ": ", "s must be between 0 and 1")
+  if (!("beta" %in% nd) || !("varbeta" %in% nd)) {
+    if (!("pvalues" %in% nd) || !("MAF" %in% nd)) 
+      stop("dataset ", suffix, ": ", "require p values and MAF if beta, varbeta are unavailable")
+    if (d$type[[1]] == "cc" && !("s" %in% nd)) 
+      stop("dataset ", suffix, ": ", "require, s, proportion of samples who are cases, if beta, varbeta are unavailable")
+    p = d$pvalues
+  }
+  else {
+    p = pnorm(-abs(d$beta/sqrt(d$varbeta))) * 2
+  }
+  if (min(p) > warn.minp) 
+    warning("minimum p value is: ", format.pval(min(p)), 
+            "\nIf this is what you expected, this is not a problem.\nIf this is not as small as you expected, please check the 02_data vignette.")
+  if (d$type[[1]] == "quant" && !("sdY" %in% nd)) 
+    if (!("MAF" %in% nd && "N" %in% nd)) 
+      stop("dataset ", suffix, ": ", "must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
+  if ("LD" %in% nd) {
+    if (nrow(d$LD) != ncol(d$LD)) 
+      stop("LD not square")
+    if (!identical(colnames(d$LD), rownames(d$LD))) 
+      stop("LD rownames != colnames")
+    if (length(setdiff(d$snp, colnames(d$LD)))) 
+      stop("colnames in LD do not contain all SNPs")
+  }
+  NULL
+}
+
+
+#### process.dataset.ht
+process.dataset.ht <- function(d, suffix) {
+  nd <- names(d)
+  if (!"type" %in% nd) 
+    stop("dataset ", suffix, ": ", "The variable type must be set, otherwise the Bayes factors cannot be computed")
+  if (!(d$type[[1]] %in% c("quant", "cc"))) 
+    stop("dataset ", suffix, ": ", "type must be quant or cc")
+  if (d$type[[1]] == "cc" & "pvalues" %in% nd) {
+    if (!("s" %in% nd)) 
+      stop("dataset ", suffix, ": ", "please give s, proportion of samples who are cases, if using p values")
+    if (!("MAF" %in% nd)) 
+      stop("dataset ", suffix, ": ", "please give MAF if using p values")
+    if (d$s[[1]] <= 0 || d$s[[1]] >= 1) 
+      stop("dataset ", suffix, ": ", "s must be between 0 and 1")
+  }
+  if (d$type[[1]] == "quant") {
+    if (!("sdY" %in% nd || ("MAF" %in% nd && "N" %in% nd))) 
+      stop("dataset ", suffix, ": ", "must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
+  }
+  if ("beta" %in% nd && "varbeta" %in% nd) {
+    if (length(d$beta) != length(d$varbeta)) 
+      stop("dataset ", suffix, ": ", "Length of the beta vectors and variance vectors must match")
+    if (!("snp" %in% nd)) 
+      d$snp <- sprintf("SNP.%s", 1:length(d$beta))
+    if (length(d$snp) != length(d$beta)) 
+      stop("dataset ", suffix, ": ", "Length of snp names and beta vectors must match")
+    if (d$type[[1]] == "quant" && !("sdY" %in% nd)) 
+      d$sdY <- coloc:::sdY.est(d$varbeta, d$MAF, d$N)
+    df <- coloc:::approx.bf.estimates(z = d$beta/sqrt(d$varbeta), 
+                              V = d$varbeta, type = d$type[[1]], suffix = suffix, sdY = d$sdY[[1]])
+    df$snp <- as.character(d$snp)
+    if ("position" %in% nd) 
+      df <- cbind(df, position = d$position)
+    return(df)
+  }
+  if ("pvalues" %in% nd & "MAF" %in% nd & "N" %in% nd) {
+    if (length(d$pvalues) != length(d$MAF)) 
+      stop("Length of the P-value vectors and MAF vector must match")
+    if (!("snp" %in% nd)) 
+      d$snp <- sprintf("SNP.%s", 1:length(d$pvalues))
+    df <- data.frame(pvalues = d$pvalues, MAF = d$MAF, N = d$N, 
+                     snp = as.character(d$snp))
+    snp.index <- which(colnames(df) == "snp")
+    colnames(df)[-snp.index] <- paste(colnames(df)[-snp.index], 
+                                      suffix, sep = ".")
+    keep <- which(df$MAF > 0 & df$pvalues > 0)
+    df <- df[keep, ]
+    abf <- coloc:::approx.bf.p(p = df$pvalues, f = df$MAF, type = d$type[[1]], 
+                       N = df$N, s = d$s, suffix = suffix)
+    df <- cbind(df, abf)
+    if ("position" %in% nd) 
+      df <- cbind(df, position = d$position[keep])
+    return(df)
+  }
+  stop("Must give, as a minimum, one of:\n(beta, varbeta, type, sdY)\n(beta, varbeta, type, MAF)\n(pvalues, MAF, N, type)")
+}
