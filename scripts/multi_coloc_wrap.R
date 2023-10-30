@@ -151,20 +151,12 @@ if(locus %in% hla_locus){
   })
   names(datasets) <- unique(loci.table.tmp$trait)
   cat("\nGWAS summary statistics succesfully munged\n")
-  
-<<<<<<< scripts/multi_coloc_wrap.R
+
   if(opt$save_inter_files==TRUE){
     saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
 #    datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.rds"))
   }  
 
-=======
-############################################################## To delete (?)
-# saveRDS(datasets, file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
-# datasets <- readRDS(file=paste0(opt$output, "/temporary/locus_", locus, "_datasets.RData"))
-############################################################## 
-  
->>>>>>> scripts/multi_coloc_wrap.R
 # Perform cojo
   conditional.datasets=list()
   max.loci=1
@@ -386,7 +378,6 @@ if(locus %in% hla_locus){
         pleio.all$Z=pleio.all$b/pleio.all$se
         pleio.all$Z_scaled=pleio.all$Z/sqrt(pleio.all$n)
         
-<<<<<<< scripts/multi_coloc_wrap.R
         pleio.all <- as.data.frame(pleio.all %>%
           group_by(SNP,trait) %>%
           mutate(Z=mean(Z), Z_scaled=mean(Z_scaled)) %>%
@@ -400,10 +391,6 @@ if(locus %in% hla_locus){
 
         a <- pleio.all %>% select(-Z_scaled) %>% spread(trait, Z)
         a[is.na(a)] <- 0
-=======
-##### Raw Z-scores        
-        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
->>>>>>> scripts/multi_coloc_wrap.R
         row.names(a)=a$SNP
                 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table.pdf"),
@@ -418,12 +405,9 @@ if(locus %in% hla_locus){
         dev.off()
 
 ##### Scaled Z-scores
-<<<<<<< scripts/multi_coloc_wrap.R
+#        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
         a2 <- pleio.all %>% select(-Z) %>% spread(trait, Z_scaled)
         a2[is.na(a2)] <- 0
-=======
-        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
->>>>>>> scripts/multi_coloc_wrap.R
         row.names(a2)=a2$SNP
 
         pdf(paste0(opt$output, "/plots/locus_",locus,"_pleiotropy_table_scaled.pdf"),
@@ -436,12 +420,7 @@ if(locus %in% hla_locus){
           col=COL2('RdBu', 200),
           col.lim=c(max(abs(a2[,-1]))*-1,max(abs(a2[,-1]))))
         dev.off()
-<<<<<<< scripts/multi_coloc_wrap.R
 
-=======
-  
-     
->>>>>>> scripts/multi_coloc_wrap.R
   ### Plot coloc
         coloc.plot(final.colocs.H4, outpath=paste0(opt$output, "/plots/"))  
       } else {
