@@ -1,6 +1,0 @@
-##### Check how merge works for two parallel branches
-
-banana
-vanilla
-Attention! New line!
-mango
