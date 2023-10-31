@@ -313,7 +313,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,ma
       tmp$othA[n]=alleles[!(alleles%in%tmp$refA[n])]
     }
     tmp
-  })))
+  }), fill=TRUE))
   return(final.locus.table.tmp)
 }
 
@@ -731,7 +731,7 @@ final.plot <- function(locus,
   final <- as.data.frame(rbindlist(lapply(loci_table %>% group_split(sub_locus), function(x){
     x %>%
       group_by(snp) %>%
-      mutate(joint.pp=sum(lABF)) %>%
+      mutate(joint.pp=sum(lABF, na.rm=T)) %>%
       ungroup() %>%
       filter(joint.pp==max(joint.pp))
   })))

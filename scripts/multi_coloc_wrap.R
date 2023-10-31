@@ -236,8 +236,8 @@ if(locus %in% hla_locus){
     # Add trait and cojo hit as dataframe columns
     for(i in 1:length(data_sub)){
       data_sub[[i]] <- data_sub[[i]] %>% 
-        mutate(trait=gsub("(\\w+).results.(.*$)", "\\1", names(data_sub)[[i]]),
-               cojo_snp=gsub("(\\w+).results.(.*$)", "\\2", names(data_sub)[[i]])
+        mutate(trait=gsub("(^.*).results.(.*$)", "\\1", names(data_sub)[[i]]),
+               cojo_snp=gsub("(^.*).results.(.*$)", "\\2", names(data_sub)[[i]])
         )
     }
     
