@@ -258,7 +258,7 @@ if(locus %in% hla_locus){
       x$varbeta=x$varbeta^2
       x=na.omit(x)
       # Finemap  
-      fine.res <- finemap.abf(x) %>%
+      fine.res <- finemap.abf.new(x) %>%
         arrange(desc(SNP.PP)) %>% 
         mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
         # Add trait and cojo_hit info, to merge with loci table later

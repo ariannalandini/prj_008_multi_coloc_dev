@@ -943,4 +943,48 @@ final.plot <- function(locus,
   
   ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
-} 
+}
+
+
+################# coloc::finemap.abf() from coloc_5.1.0 was causing in some cases to have NA SNP.PP. Bug seem fixed in latest version (coloc_5.2.2)
+
+adjust_prior=function(p,nsnps,suffix="") {
+  if(nsnps * p >= 1) { ## for very large regions
+    warning(paste0("p",suffix," * nsnps >= 1, setting p",suffix,"=1/(nsnps + 1)"))
+    1/(nsnps + 1)
+  } else {
+    p
+  }
+}
+
+finemap.abf.new <- function(dataset, p1=1e-4) {
+  
+  coloc:::check_dataset(dataset,"")
+  
+  df <- coloc:::process.dataset(d=dataset, suffix="")
+  nsnps <- nrow(df)
+  p1=adjust_prior(p1,nsnps,"1")
+  
+  dfnull <- df[1,]
+  for(nm in colnames(df))
+    dfnull[,nm] <- NA
+  dfnull[,"snp"] <- "null"
+  dfnull[,"lABF."] <- 0
+  df <- rbind(df,dfnull)
+  ## data.frame("V."=NA,
+  ##            z.=NA,
+  ##            r.=NA,
+  ##            lABF.=1,
+  ##            snp="null"))
+  df$prior <- c(rep(p1,nsnps),1-nsnps*p1)
+  
+  ## add SNP.PP.H4 - post prob that each SNP is THE causal variant for a shared signal
+  ## BUGFIX 16/5/19
+  ## my.denom.log.abf <- coloc:::logsum(df$lABF + df$prior)
+  ## df$SNP.PP <- exp(df$lABF - my.denom.log.abf)
+  my.denom.log.abf <- coloc:::logsum(df$lABF + log(df$prior))
+  df$SNP.PP <- exp(df$lABF + log(df$prior) - my.denom.log.abf)
+  
+  return(df)
+}
+
