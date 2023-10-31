@@ -259,7 +259,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
       x$varbeta=x$varbeta^2
       x=na.omit(x)
       # Finemap  
-      fine.res <- finemap.abf(x) %>%
+      fine.res <- finemap.abf.new(x) %>% #### finemap.abf function taken from latest coloc version! coloc 5.2.2
         arrange(desc(SNP.PP)) %>% 
         mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
         # Add trait and cojo_hit info, to merge with loci table later
