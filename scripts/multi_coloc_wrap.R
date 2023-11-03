@@ -334,7 +334,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
   #   k=1 (needed? Left from Nicola's code)
 
   # If at least a couple of traits successfully colocalised 
-      if(nrow(final.colocs.H4)>0){
+        if(nrow(final.colocs.H4)>0 && !is.null(final.colocs.H4)){
   # Create a graph from the "hit1" and "hit2" columns of the final.colocs.H4 data frame
         a.graph=graph_from_data_frame(final.colocs.H4[,c("hit1","hit2")],directed=F)
   # Identify connected components in the graph      
@@ -432,8 +432,8 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
           file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.all.tsv"), row.names=F,quote=F,sep="\t")
       }
       
-      if(nrow(final.colocs.H4)>0){
-  ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
+      if(nrow(final.colocs.H4)>0 && !is.null(final.colocs.H4)){
+ ### Join H4 coloc info with flagged SNPs info to remove SNPs failing above p-value filtering
   # Summary output of coloc      
         colocalization.table.H4 <- final.colocs.H4 %>%
           inner_join(
