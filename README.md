@@ -12,9 +12,10 @@ Performs:
     2.1) Identification of independent association signals​ by trait\
     2.2) Leave-one-out approach to “clean” single association signal
 
-3) Traits colocalisation
+3) Finemapping of likely causal variant(s) 
 
-4) Finemapping of likely causal variant (for each group of colocalasing traits) using coloc posterior probability by SNP
+4) Traits colocalisation
+<br>
 <br>
 <br>
 
@@ -23,7 +24,7 @@ Navigate to your project folder:\
 `cd your_project_folder`
 
 Clone this repository:\
-`git clone https://gitlab.fht.org/biostatistics-unit/prj_008_multi_coloc_dev.git`
+`git clone -b development https://gitlab.fht.org/biostatistics-unit/prj_008_multi_coloc_dev.git`
 
 Create a `logs` directory (**REQUIRED**):\
 `mkdir logs`
@@ -46,12 +47,13 @@ GWAS summary statistics should use identical column names, irrespective of wheth
 | 1     | 14022	 | 1:14022      | A       | G       | 0.9998 | 367458 |  0.0461 | 0.1777 | 0.0993 |
 | 1     | 23197	 | rs1220638906 | T       | TTAAAA  | 0.9942 | 367458 | -0.038  | 0.0285 | 0.7407 |
 <br>
+<br>
 
 **2) Loci table**
 
 A "guide" table reporting which genomic regions and traits to test for colocalisation. 
 
-the following info (using the below listed column names):
+MANDATORY info (using the below listed column names):
 
 - chr: chromosome number 
 - start: starting position of the genomic region of interest
@@ -64,28 +66,43 @@ the following info (using the below listed column names):
     if type=="quant" and it is known
     - sdY: for a quantitative trait, the population standard deviation of the trait (OPTIONAL - if not given, it will be estimated from the variance of beta and MAF)
 
+MANDATORY info that can be either provided in the table or as script options (see "Options in details"):
+- grch: human genomic build of provided GWAS summary statistics (GRCh 37 and 38 are supported at the moment). **NB: All traits having an association in the same locus MUST have the same build!**
 
-| chr | start     | end       | trait    | path                            | type  | sdY  | s    |
-|-----|-----------|-----------|----------|---------------------------------|-------|------|------|
-| 1   | 11740966  |	11760802  | height   | /group/gwas/height_gwas.cvs.gz  | quant | 0.45 | NA   |
-| 1   | 11740966  |	11760802  | bmi      | /random_path/my_gwas_bmi.tsv    | quant | 1.2  | NA   |
-| 1   | 17273822  | 17348042  | mpv      | /test/mpv.txt.gz                | quant | 0.02 | NA   |
-| 1   | 20560648  | 21242860  | diabetes | /shared/folder/diabetes_103.tsv | cc    | NA   | 0.1  |
-| 1   | 28183819  | 28850273  | hbg      | /group/gwas/hgb_gwas.cvs.gz     | quant | 0.01 | NA   |
-| 1   | 117583999 | 117640170 | height   | /group/gwas/height_gwas.cvs.gz  | quant | 0.45 | NA   |
-| 1   | 117583999 | 117640170 | cvd      | /all_gwas/my_sample_cardio.tsv  | cc    | NA   | 0.36 |
+CUSTOMIZABILE **NOT** MANDATORY info that can be either provided in the table as script options (see "Options in details"):
+- bfile: Path and prefix name of custom LD reference panel bfiles (PLINK format .bed .bim .fam)
 <br>
+<br>
+
+| chr | start     | end       | trait    | path                            | type  | sdY  | s    | grch |             bfile            |
+|-----|-----------|-----------|----------|---------------------------------|-------|------|------|------|------------------------------|
+| 1   | 11740966  |	11760802  | height   | /group/gwas/height_gwas.cvs.gz  | quant | 0.45 | NA   |  37  |              NA              |
+| 1   | 11740966  |	11760802  | bmi      | /random_path/my_gwas_bmi.tsv    | quant | 1.2  | NA   |  37  |              NA              |
+| 1   | 17273822  | 17348042  | mpv      | /test/mpv.txt.gz                | quant | 0.02 | NA   |  38  |              NA              |
+| 1   | 20560648  | 21242860  | diabetes | /shared/folder/diabetes_103.tsv | cc    | NA   | 0.1  |  37  |   /path/to/different_ld_ref  |
+| 1   | 28183819  | 28850273  | hbg      | /group/gwas/hgb_gwas.cvs.gz     | quant | 0.01 | NA   |  37  |   /path/to/different_ld_ref  |
+| 1   | 117583999 | 117640170 | height   | /group/gwas/height_gwas.cvs.gz  | quant | 0.45 | NA   |  38  |              NA              |
+| 1   | 117583999 | 117640170 | cvd      | /all_gwas/my_sample_cardio.tsv  | cc    | NA   | 0.36 |  38  | /path/to/ld_ref_plink_format |
+<br>
+
+
+
 
 The loci table can be either produced by using the `p09_locus_breaker.sbatch` and `p10_locus_lister.sbatch` scripts or can be directly provided by the user.
 
 **!!! VERY IMPORTANT !!!**\
-When generating the loci table using the `p09_locus_breaker.sbatch` and `p10_locus_lister.sbatch` scripts, it should be noted that the columns labeled as `type`, `sdY`, and/or `s` will not be automatically incorporated into the resulting table, ***unless*** these columns are already present in the GWAS summary statistics file.
-In cases where users opt not to make modifications to the GWAS summary statistics, the `type`, `sdY`, and/or `s` columns needs to be manually appended to the table produced by the `p10_locus_lister.sbatch` script. This action should be carried out before running the `p11_multi_coloc.sbatch` script.
+When generating the loci table using the `p09_locus_breaker.sbatch` and `p10_locus_lister.sbatch` scripts, it should be noted that the columns labeled as `type`, `sdY` and/or `s`, `grch` and `bfile` (if required) will **not** be automatically incorporated into the resulting table, ***unless*** these columns are already present in the GWAS summary statistics file.
+In cases where users opt to not modify the GWAS summary statistics, the `type`, `sdY`, and/or `s`, `grch` and `bfile` columns needs to be manually appended to the table produced by the `p10_locus_lister.sbatch` script. This action should be carried out before running the `p11_multi_coloc.sbatch` script.
+<br>
 <br>
 
 
 **3) LD reference**\
-LD reference from UKBB TOPMed imputed genotypes will be used.
+Custom LD references can be provided in plink format (.bed, .bim, .fam), and  can be either specified in the input loci table (higher flexibility, allows for multiple, GWAS-specific, LD references) or as script option (fast and easy for one-fits-all LD reference). Please note that the GWAS summary statistics and the corresponding LD reference should be expressed in the same human genome build.
+Please check [this link](https://yanglab.westlake.edu.cn/software/gcta/#COJO) for raccomandations regarding the choice of reference sample for GCTA-COJO analysis.
+
+By default, LD reference from 30k UKBB TOPMed imputed genotypes will be used.
+<br>
 <br>
 <br>
 
@@ -160,7 +177,8 @@ Note this is the only essential option, if not provided the script will throw an
 
 To perform association signals​ untangling, colocalisation and fine mapping, run the **`prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch`** script, providing:\
     `--input`: path and name of the pan loci table previously created.\
-Note this is the only essential option, if not provided the script will throw an error and stop.\
+    `--grch`: Genomic build of GWAS summary statistics (default: 38) \
+Note these are the only options with no default, if not provided the script will throw an error and stop.\
     `--output` "coloc/multi_coloc" \
     `--chr`: Name of the chromosome column in GWAS summary statistics (default: CHROM)\
     `--pos`: Name of the genetic position column in GWAS summary statistics (default: GENPOS)\
@@ -172,8 +190,9 @@ Note this is the only essential option, if not provided the script will throw an
     `--effect`: Name of the effect size column in GWAS summary statistics (default: "BETA") \
     `--se`: Name of standard error of effect column in GWAS summary statistics (default: "SE") \
     `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: "P") \
-    `--grch`: Genomic build of GWAS summary statistics (default: 38) \
     `--maf`: Minor allele frequency (MAF) thershold removing variants below the set threshold from the analysis (default: 0.0001) \
+    `--bfile`: Path and prefix name of custom LD reference bfiles (PLINK format .bed .bim .fam) (default: LD reference from 30k UKBB TOPMed imputed genotypes). **NB:**this option will be overriden if LD reference bfiles are provided also in the input loci table \
+    `--save_inter_files`: Whether to save intermediate munged summary statsistics and condiotioned datasets as R objects (default: FALSE)
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
 <br>
@@ -184,7 +203,7 @@ Finally, specify the number of genomic regions (identified in the previous step)
 
 **Results:**\
 locus_15_final_locus_table.tsv\
-Reporting all independent association signals identified for each trait.
+Reporting all independent association signals identified for each trait and their 99% credible set.
 
 locus_15_colocalization.table.all.tsv\
 Reporting summary results for all pairwise coloc tests performed.
@@ -227,16 +246,19 @@ Sodbo Sharapov ([sodbo.sharapov@fht.org](sodbo.sharapov@fht.org))
 
 General:
 - Create conda environment for R packages needed (easyGgplot2 and ggnet are the only packages not supported in conda. easyGgplot2 really needed? May ggnet be replaced by ggnetwork?)
+<br>
 
 Locus identification:
 - Add more possible file extension to the GWAS format in `p09_locus_breaker.sbatch`\
 - ~~Include in `locus.breaker` function the possibility of providing LOG10 p-value~~ DONE
+<br>
 
 Coloc (ideally in priority order?):
-- Possibility to provide costume LD reference - **ON GOING**
+- ~~Possibility to provide costume LD reference~~ DONE
 - Add cojo raw --> check if this solves issue with traits "bridging" colocasation between traits clearly not colocalisaing, creating a fake colocalisaing sub locus
 - Check for missing SNPs across different population GWAS - if they do not interset in the cs beacuse they're not at ALL in some datasets, they should NOT be removed from the cs intersection
 - Write from scratches cojo joint (coloc --cond is NOT a joint model)
+<br>
 
 - Include effect allele frequency in the final summary plot (next to SNP label)
 - Add legend/scale of effect size in the final summary plot
