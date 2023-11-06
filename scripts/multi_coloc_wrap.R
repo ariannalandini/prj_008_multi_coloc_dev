@@ -42,9 +42,15 @@ option_list <- list(
               help="Path and name of output directory", metavar="character"),
   make_option("--grch", type="integer", default=38, 
               help="Genomic build of GWAS summary statistics", metavar="character"),
+  make_option("--p_thresh1", type="numeric", default=5e-8, 
+              help="P-value threshold identifying significant results", metavar="character"),
+  make_option("--p_thresh2", type="numeric", default=1e-6, 
+              help="P-value threshold identifying suggestive results", metavar="character"),
+  make_option("--p_thresh3", type="numeric", default=1e-4, 
+              help="P-value threshold to clean association signal", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character"),
-  make_option("--save_inter_files", type="numeric", default=FALSE, 
+  make_option("--save_inter_files", type="logical", default=FALSE, 
               help="Whether to save intermediate datasets as R objects", metavar="character")
 ); 
 
@@ -193,7 +199,7 @@ if(locus %in% hla_locus){
   max.loci=1
   
   for(i in 1:length(datasets)){
-    tmp=cojo.ht(D=datasets[[i]], p.tresh=1e-4, maf.thresh=opt$maf, bfile=bfile)
+    tmp=cojo.ht(D=datasets[[i]], p.tresh=opt$p_thresh3, maf.thresh=opt$maf, bfile=bfile)
     if(!is.null(tmp)){
       conditional.datasets[[i]]=tmp
       names(conditional.datasets)[i]=names(datasets)[i]
@@ -204,7 +210,7 @@ if(locus %in% hla_locus){
   conditional.datasets <- conditional.datasets %>% discard(is.null)
   
   if(length(conditional.datasets)==0){
-    cat(paste0("No independent signal identified for any of the traits at locus ", locus, " for the p-value (1e-4) and maf (", opt$maf, ") thresholds specified" ))
+    cat(paste0("No independent signal identified for any of the traits at locus ", locus, " for the p-value (", opt$p_thresh3, ") and maf (", opt$maf, ") thresholds specified" ))
   } else {
   
     cat("\nSecondary associations signals identified with COJO\n")
@@ -298,8 +304,8 @@ if(locus %in% hla_locus){
         coloc.res=colo.cojo.ht(
           conditional.dataset1=conditional.datasets[[pairwise.list[i,1]]],
           conditional.dataset2 = conditional.datasets[[pairwise.list[i,2]]],
-          p.threshold.cond = 1e-6,
-          p.threshold.orig = 5e-8)
+          p.threshold.cond = opt$p_thresh2,
+          p.threshold.orig = opt$p_thresh1)
   # Check if coloc was actually performed        
         if(!is.null(coloc.res)){
   # Store the summary output in a data frame, adding tested traits column         
@@ -348,8 +354,8 @@ if(locus %in% hla_locus){
   ######## Filtering criteria to double-check with Nicola - SNPs with extremely significant pJ (but not p) are removed   
         final.locus.table.tmp <- as.data.frame(final.locus.table.tmp %>%
           group_by(sub_locus) %>%
-          mutate(flag=ifelse(any((p < 5e-8 & pJ < 1e-6) | pJ < 5e-8), "keep", "remove")) %>%
-          mutate(flag=ifelse((p < 5e-8 & pJ < 1e-4) | pJ < 5e-8, flag, "remove"))
+          mutate(flag=ifelse(any((p < opt$p_thresh1 & pJ < opt$p_thresh2) | pJ < opt$p_thresh1), "keep", "remove")) %>%
+          mutate(flag=ifelse((p < opt$p_thresh1 & pJ < opt$p_thresh3) | pJ < opt$p_thresh1, flag, "remove"))
         )
   
   ### Create pleiotropy table

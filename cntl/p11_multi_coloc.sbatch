@@ -25,6 +25,9 @@ Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --se "SE" \
 --pvalue "P" \
 --grch 38 \
+--p_thresh1 5e-8 \
+--p_thresh2 1e-6 \
+--p_thresh3 1e-4 \
 --maf 0.0001 \
 --save_inter_files "TRUE"
 
