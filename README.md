@@ -31,6 +31,43 @@ Create a `logs` directory (**REQUIRED**):\
 <br>
 <br>
 
+## Software requirments
+
+`R/4.1.0`
+
+    CRAN packages:
+    optparse
+    data.table
+    r.utils
+    tidyr
+    corrplot
+    bigsnpr
+    ggplot2
+    cowplot
+    igraph
+    RColorBrewer
+    patchwork
+    stringi
+    reshape2
+    plyr
+    purrr
+    dplyr
+    coloc v.5.1.0
+    
+    Bioconductor packages:
+    Gviz
+    EnsDb.Hsapiens.v75
+    GenomicRanges
+
+**Please make sure to have coloc v.5.1.0! Conda environment is coming soon!**
+
+[tabix](https://www.htslib.org/doc/tabix.html) \
+[GCTA](https://yanglab.westlake.edu.cn/software/gcta/#Overview)\
+[plink2](https://www.cog-genomics.org/plink/2.0/)\
+<br>
+<br>
+
+
 ## Required inputs
 
 **1) GWAS summary statistics**
@@ -101,7 +138,7 @@ In cases where users opt to not modify the GWAS summary statistics, the `type`, 
 Custom LD references can be provided in plink format (.bed, .bim, .fam), and  can be either specified in the input loci table (higher flexibility, allows for multiple, GWAS-specific, LD references) or as script option (fast and easy for one-fits-all LD reference). Please note that the GWAS summary statistics and the corresponding LD reference should be expressed in the same human genome build.
 Please check [this link](https://yanglab.westlake.edu.cn/software/gcta/#COJO) for raccomandations regarding the choice of reference sample for GCTA-COJO analysis.
 
-By default, LD reference from 30k UKBB TOPMed imputed genotypes will be used.
+~~By default, LD reference from 30k UKBB TOPMed imputed genotypes will be used.~~
 <br>
 <br>
 <br>
@@ -217,9 +254,10 @@ locus_15_conditioned_loci.pdf\
 Visualising the assocation pattern "dissecting" process for each tested trait.
 
 locus_15_pleiotropy_table.pdf
+Z-scores "heatmap" of top SNPs submitted to colocalisation analysis
 
 locus_15_colocalization_plot.pdf\
-Regional Manhattan plot of colocalising traits.
+Regional Manhattan plot of colocalising traits (colocalising traits in the same colour)
 
 locus_15_results_summary_plot.png\
 Reporting all independent signals and traits associated at the locus, summarising the colocalising ones and placing them in the context of the chromosome (with genes annotation).
