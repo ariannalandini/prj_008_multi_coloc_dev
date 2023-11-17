@@ -89,7 +89,7 @@ load_and_check_input <- function(opt, locus){
       "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"))
     }
   if(is.null(opt$bfile) & !is.null(loci.table.tmp$bfile) & any(is.na(loci.table.tmp$bfile))){
-    print("Warning: since no custom LD reference was provided for some traits, defualt UKBB one will be used for those\n")
+    print("Warning: since no custom LD reference was provided for some traits, default UKBB one will be used for those\n")
       loci.table.tmp <- loci.table.tmp %>% mutate(bfile=ifelse(is.na(bfile), 
         ifelse(grch==38, "/ssu/bsssu/ghrc38_reference/ukbb_all_chrs_grch38_maf0.01_30000_random_unrelated_white_british", "/processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british"), bfile))
   }
@@ -234,12 +234,13 @@ dataset.munge=function(sumstats.file
 
   flip=dataset[,c("SNP","CHR","BP","A2","A1","BETA")]
   names(flip)=c("rsid","chr","pos","a0","a1","beta")
-#  names(map)=c("rsid","chr","pos","maf","a1","a0") ### Do we really need to provid MAF?!
+#  names(map)=c("rsid","chr","pos","maf","a1","a0") ### Do we really need to provide MAF?!
   names(map)=c("rsid","chr","pos","a1","a0")
   
   flip.t=snp_match(sumstats=flip,
                    info_snp=map,
 #                   join_by_pos=FALSE,
+                   remove_dups = TRUE,
                    join_by_pos=TRUE,
                    strand_flip=FALSE,
                    match.min.prop=0)
@@ -305,7 +306,8 @@ cojo.ht=function(D=datasets[[1]]
       left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 
     dataset.list=list()
-    dataset.list$ind.snps=ind.snp
+    dataset.list$ind.snps <- data.frame(matrix(ncol = ncol(ind.snp), nrow = 0))
+    colnames(dataset.list$ind.snps) <- colnames(ind.snp)
     dataset.list$results=list()
   
     if(nrow(ind.snp)>1){
@@ -316,28 +318,22 @@ cojo.ht=function(D=datasets[[1]]
       
         system(paste0(gcta.bin," --bfile ",random.number, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
       
-#### KEEP WORKING FROM HERE ###### try catch COJO errors - commented out for not breaking the code until this piece in finished
-      
-#      test_res <- tryCatch(
-#        system(paste0(gcta.bin," --bfile ",random.number,"  --extract ",random.number,".snp.list  --cojo-file ",random.number,"_sum.txt  --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"), intern=TRUE),
-#        warning = function(war) {
-          # Handle the warning here
-          # You can print an error message or perform any other desired action
-#          print(paste("Hey hey! Error:", conditionMessage(war)))
-          # Return a default value or NULL to indicate failure
-#          NULL
-#        }
-#      )
-      
+#### STOP ANALYSIS FOR THAT TOP SNP IN CASE OF COLLINEARITY
+        if(!file.exists(paste0(random.number,"_step2.cma.cojo"))){
+          cat(paste0("\n****WARNING: COJO has encountered a collinearty problem. Affected SNP will be removed from following analysis****\n\n"))
+        } else {
 ############
-
-# Re-add type and sdY/s info, and map SNPs!
-        step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-          left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
-        dataset.list$results[[i]]=step2.res
-        names(dataset.list$results)[i]=ind.snp$snp_map[i]
+  # Re-add type and sdY/s info, and map SNPs!
+          step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
+            left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
+# Add SNPs to the ind.snps dataframe         
+          dataset.list$ind.snps <- rbind(dataset.list$ind.snps, ind.snp[i,])
+# Add conditioned gwas to the results list          
+          dataset.list$results[[i]]=step2.res
+          names(dataset.list$results)[i]=ind.snp$snp_map[i]
+          system(paste0("rm ",random.number,"_step2.cma.cojo"))
+        }
       }
-    
     } else {
 
 ### NB: COJO here is performed ONLY for formatting sakes - No need to condition if only one signal is found!!        
@@ -345,7 +341,7 @@ cojo.ht=function(D=datasets[[1]]
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
 
     step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
+      left_join(D %>% select(SNP,snp_map,A1,type,any_of(c("sdY", "s"))), by=c("SNP", "refA"="A1"))
 
 #### Add back top SNP, removed from the data frame with the conditioning step
     step2.res <- rbind.fill(step2.res, ind.snp %>% select(-bJ,-bJ_se,-pJ,-LD_r))
@@ -353,10 +349,13 @@ cojo.ht=function(D=datasets[[1]]
     step2.res$bC_se <- NA
     step2.res$pC <- NA
 
+    dataset.list$ind.snps <- rbind(dataset.list$ind.snps, ind.snp[1,])
     dataset.list$results[[1]]=step2.res
     names(dataset.list$results)[1]=ind.snp$snp_map[1]
     }
   }
+# Remove results df possibly empty (in case of collinearity issue)
+  dataset.list$results <- dataset.list$results %>% discard(is.null)
   system(paste0("rm *",random.number,"*"))
   if(exists("dataset.list")){dataset.list}
 }
@@ -437,15 +436,15 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
                       ,p.threshold.cond=1e-6
                       ,p.threshold.orig=5e-8){
   
-  if(length(grep("pJ",names(conditional.dataset1$ind.snps)))>0){
-    
+#  if(length(grep("pJ",names(conditional.dataset1$ind.snps)))>0){
+  if(any(!is.na(conditional.dataset1$ind.snps$pJ))){
     hits.t1=conditional.dataset1$ind.snps$snp_map[conditional.dataset1$ind.snps$pJ<p.threshold.cond | conditional.dataset1$ind.snps$p <p.threshold.orig]
   }else{
     hits.t1=conditional.dataset1$ind.snps$snp_map
   }
   
-  if(length(grep("pJ",names(conditional.dataset2$ind.snps)))>0){
-    
+#  if(length(grep("pJ",names(conditional.dataset2$ind.snps)))>0){
+  if(any(!is.na(conditional.dataset2$ind.snps$pJ))){
     hits.t2=conditional.dataset2$ind.snps$snp_map[conditional.dataset2$ind.snps$pJ<p.threshold.cond | conditional.dataset2$ind.snps$p<p.threshold.orig]
   }else{
     hits.t2=conditional.dataset2$ind.snps$hits.t2
@@ -674,8 +673,8 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
     doppi=names(duplicati)[duplicati>1]
     for(i in doppi){
       tmp=conditional.datasets[[i]]$ind.snps
-      tmp=tmp[which(tmp$SNP%in%loc.table$SNP[loc.table$trait==i]),]
-      min.snp=tmp$SNP[which.min(tmp$pJ)]
+      tmp=tmp[which(tmp$snp_map%in%loc.table$SNP[loc.table$trait==i]),]
+      min.snp=tmp$snp_map[which.min(tmp$pJ)]
       loc.table=loc.table[which(loc.table$trait!=i | (loc.table$trait==i & loc.table$SNP==min.snp)),]
     }
   }
@@ -876,6 +875,12 @@ final.plot <- function(locus,
       panel.grid.minor = element_blank()
     )
   
+### If SNP labels are too many, plot them 45 degrees angles
+  if(length(unique(final$group))>10){
+    p1 <- p1 + theme(axis.text.x = element_text(size=9, angle=45, hjust=1))
+  }
+  
+  
 ### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
   p2 <- ggplot(final %>% distinct(group, .keep_all=T), aes(x = bp)) +
     geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), color="black") +
@@ -905,100 +910,108 @@ final.plot <- function(locus,
   ind <- findOverlaps(GRanges(seqnames=chr,IRanges(start=bp_min,end=bp_max)),ref_genes,type="any")
   a <- ref_genes[ind@to,]
   
-  granges2df <- function(x) {
-    df <- as(x, "data.frame")
-    df <- df[,c("seqnames","start","end","strand","group_name",'exon_id')]
-    colnames(df)[1] <- "chromosome"
-    colnames(df)[5] <- "transcript"
-    df
-  }
+# Plot only if at least one gene is found  
+  if(length(a$gene_id)>0){
   
-  txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
-                            keys=keys(EnsDb.Hsapiens.v75, "GENEID"),
-                            columns=c("GENEID","TXID", 'SYMBOL'),
-                            keytype="GENEID")
-  ebt <- exonsBy(EnsDb.Hsapiens.v75, by="tx")
-  
-  ## Arrange info about all transcripts
-  d <- list()
-  
-  for(i in 1:length(a@elementMetadata$gene_id)){
-    idx <- txdf$GENEID ==  a@elementMetadata$gene_id[i]
-    txs <- txdf$TXID[idx]
-    #all the xons for these transcripts
-    ebt2 <- ebt[txs]
-    df <- granges2df(ebt2)
-    df$gene <- a@elementMetadata$gene_id[i]
-    df$symbol <-  txdf[match(df$gene, txdf$GENEID), ]$SYMBOL 
-    d[[i]] <- df
-  }
-  
-  d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
-  
-  gene.starts <- by(d$start,d$symbo,FUN = min)
-  gene.end <- by(d$end,d$symbo,FUN = max)
-  gene.strand <- by(d$y,d$symbo,FUN = unique)
-  
-  g.table=as.data.frame(cbind(gene.starts,gene.end,gene.strand))
-  g.table=g.table[order(g.table$gene.starts),]
-#  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
-#  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
-#  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
-  
-  g.table <- g.table %>%
-    mutate(gene.starts=round(gene.starts/1e+6,2), gene.end=round(gene.end/1e+6,2)) %>%
-    mutate(gene.starts=ifelse(gene.starts<round(bp_min/1e+6,2),
-      round(bp_min/1e+6,2),gene.starts)) %>%
-    mutate(gene.end=ifelse(gene.end>round(bp_max/1e+6,2),
-                              round(bp_max/1e+6,2),gene.end)) 
-  
-  g.table$gene.strand <- as.character(g.table$gene.strand)
-  lab.table=rowMeans(g.table[,1:2])
-  
-  if(length(names(lab.table))>1){
-  names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
-  names(lab.table)[c(FALSE,TRUE)] <- paste0("\n\n\n\n\n", names(lab.table)[c(FALSE,TRUE)])
-  } else {
-    names(lab.table) <- paste0("\n\n\n", names(lab.table))
-  }
-  
-  ### Gene position - doesn't make a lot of sense with the two strands
-  p3 <- ggplot(g.table) +
-    geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
-    geom_rect(aes(xmin=gene.starts, xmax=gene.end, ymin=0.499, ymax=0.501, fill=gene.strand), color="black") +
-    geom_text(aes(y=0.5, x=lab.table, label=names(lab.table)),size=3.5) +
-    xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
-    scale_x_continuous(
-      limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
-      breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
-      expand=c(0.01,0.01)
-    ) +
-    scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
-    scale_fill_manual(
-      values = c("-1"="#ff8000", "1"="#007fff"),
-      labels = c("-","+")
+    granges2df <- function(x) {
+      df <- as(x, "data.frame")
+      df <- df[,c("seqnames","start","end","strand","group_name",'exon_id')]
+      colnames(df)[1] <- "chromosome"
+      colnames(df)[5] <- "transcript"
+      df
+    }
+    
+    txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
+                              keys=keys(EnsDb.Hsapiens.v75, "GENEID"),
+                              columns=c("GENEID","TXID", 'SYMBOL'),
+                              keytype="GENEID")
+    ebt <- exonsBy(EnsDb.Hsapiens.v75, by="tx")
+    
+    ## Arrange info about all transcripts
+    d <- list()
+    
+    for(i in 1:length(a@elementMetadata$gene_id)){
+      idx <- txdf$GENEID ==  a@elementMetadata$gene_id[i]
+      txs <- txdf$TXID[idx]
+      #all the xons for these transcripts
+      ebt2 <- ebt[txs]
+      df <- granges2df(ebt2)
+      df$gene <- a@elementMetadata$gene_id[i]
+      df$symbol <-  txdf[match(df$gene, txdf$GENEID), ]$SYMBOL 
+      d[[i]] <- df
+    }
+    
+    d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
+
+####### In case of the same gene having transcripts on both strands, take the strand with most transcript
+      d <- d %>% semi_join(
+        d %>% count(symbol, y) %>% group_by(symbol) %>% slice(which.max(n)),
+        by = c("symbol", "y"))
+
+    gene.starts <- by(d$start,d$symbol,FUN = min)
+    gene.end <- by(d$end,d$symbol,FUN = max)
+    gene.strand <- by(d$y,d$symbol,FUN = unique)
+    
+    g.table=as.data.frame(cbind(gene.starts,gene.end,gene.strand))
+    g.table=g.table[order(g.table$gene.starts),]
+  #  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
+  #  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
+  #  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
+    
+    g.table <- g.table %>%
+      mutate(gene.starts=round(gene.starts/1e+6,2), gene.end=round(gene.end/1e+6,2)) %>%
+      mutate(gene.starts=ifelse(gene.starts<round(bp_min/1e+6,2),
+        round(bp_min/1e+6,2),gene.starts)) %>%
+      mutate(gene.end=ifelse(gene.end>round(bp_max/1e+6,2),
+                                round(bp_max/1e+6,2),gene.end)) 
+    
+    g.table$gene.strand <- as.character(g.table$gene.strand)
+    lab.table=rowMeans(g.table[,1:2])
+    
+    if(length(names(lab.table))>1){
+    names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
+    names(lab.table)[c(FALSE,TRUE)] <- paste0("\n\n\n\n\n", names(lab.table)[c(FALSE,TRUE)])
+    } else {
+      names(lab.table) <- paste0("\n\n\n", names(lab.table))
+    }
+    
+### Gene position - doesn't make a lot of sense with the two strands
+    p3 <- ggplot(g.table) +
+      geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
+      geom_rect(aes(xmin=gene.starts, xmax=gene.end, ymin=0.499, ymax=0.501, fill=gene.strand), color="black") +
+      geom_text(aes(y=0.5, x=lab.table, label=names(lab.table)),size=3.5) +
+      xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
+      scale_x_continuous(
+        limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
+        breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
+        expand=c(0.01,0.01)
       ) +
-    theme_bw() +
-    guides(fill=guide_legend(title="DNA strand   ")) +
-    theme(
-      legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
-      legend.text = element_text(size = 12, vjust=0.5),
-      legend.title = element_text(size = 10, vjust=0.5),
-      legend.position = "bottom",
-      legend.direction="horizontal",
-      legend.key.width = unit(0.5, "cm"),
-      legend.key.height = unit(0.5, "cm"),
-      axis.title.y = element_blank(),
-      axis.ticks.y = element_blank(),
-      axis.text.y = element_blank(),
-      panel.grid.major = element_blank(),
-      panel.grid.minor = element_blank(),
-      panel.border = element_blank(),
-      axis.line.x = element_line(color="black", linewidth=0.5),
-      axis.line.y = element_blank()
-    )
+      scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
+      scale_fill_manual(
+        values = c("-1"="#ff8000", "1"="#007fff"),
+        labels = c("-","+")
+        ) +
+      theme_bw() +
+      guides(fill=guide_legend(title="DNA strand   ")) +
+      theme(
+        legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
+        legend.text = element_text(size = 12, vjust=0.5),
+        legend.title = element_text(size = 10, vjust=0.5),
+        legend.position = "bottom",
+        legend.direction="horizontal",
+        legend.key.width = unit(0.5, "cm"),
+        legend.key.height = unit(0.5, "cm"),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_line(color="black", linewidth=0.5),
+        axis.line.y = element_blank()
+      )
   
-  ### Align all plots and legends
+### Align all plots and legends
   p1_legend <- get_legend(p1)
   p3_legend <- get_legend(p3)
   
@@ -1008,6 +1021,46 @@ final.plot <- function(locus,
     p3 + theme(legend.position = "none", plot.margin = unit(c(0, 1, 0.5, 0.2), "cm")),
     plot_grid(p1_legend,p3_legend, ncol=2),
     align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
+
+# If no genes has been found in the region  
+  } else {
+    g.table <- data.frame(chr=chr, position=c(bp_min,bp_max))
+
+    p3 <- ggplot(g.table, aes(position,1)) +
+      geom_blank() +
+      geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
+      xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
+      scale_x_continuous(
+        limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
+        breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
+        expand=c(0.01,0.01)
+      ) +
+      scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
+      theme_bw() +
+      theme(
+        legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
+        legend.text = element_text(size = 12, vjust=0.5),
+        legend.title = element_text(size = 10, vjust=0.5),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_line(color="black", linewidth=0.5),
+        axis.line.y = element_blank()
+      )    
+
+### Align all plots and legends
+    p1_legend <- get_legend(p1)
+
+    arrange_p <- plot_grid(
+      p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 1, 0, 0.2), "cm")),
+      p2 + theme(plot.margin = unit(c(0.2, 1, 0, 2), "cm")),
+      p3 + theme(legend.position = "none", plot.margin = unit(c(0, 1, 0.5, 0.2), "cm")),
+      plot_grid(p1_legend, ncol=1),
+      align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
+  }
   
   ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")

@@ -1,21 +1,22 @@
 #!/bin/bash
 #SBATCH --job-name=p11_locus_%a.log
-#SBATCH --output=coloc/multi_coloc/logs/p11_multi_coloc_locus_%a.log ### fix this - output folder should be specified in the Rscript?
+#SBATCH --output=/group/pirastu/prj_004_variant2function/ukbb_blood_coloc_021023/logs/p11_multi_coloc_locus_%a.log ### fix this - output folder should be specified in the Rscript?
 #SBATCH --partition=cpuq
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=16G
-#SBATCH --time=20:00:00
+#SBATCH --time=30:00:00
 #SBATCH --array=1-1328%100
+
+#eval "$(conda shell.bash hook)"
+#conda activate /group/pirastu/prj_004_variant2function/ukbb_blood_coloc_021023/conda_env/coloc_pipe_mambaenv
 
 # Loading modules
 module load R/4.1.0
-module load bcftools/1.14-python-3.9.10 ### required for tabix
-
 
 ### The --vanilla option tells Rscript to run without saving or restoring anything in the process. This keeps things nice and clean
 Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --input "/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv" \
---output "coloc/multi_coloc" \
+--output "/group/pirastu/prj_004_variant2function/ukbb_blood_coloc_021023" \
 --chr "CHROM" \
 --pos "GENPOS" \
 --rsid "ID" \
@@ -28,5 +29,7 @@ Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --pvalue "P" \
 --grch 38 \
 --maf 0.0001 \
---bfile path/to/my/custom_ld/name_of_plink_file \
---save_inter_files "TRUE"
+--save_inter_files "TRUE" \
+--tabix_bin "/ssu/gassu/software/htslib-tools/1.14/tabix" \
+--plink2_bin "/ssu/gassu/software/plink/2.00_20211217/plink2" \
+--gcta_bin "/ssu/gassu/software/GCTA/1.94.0beta/gcta64"
