@@ -192,7 +192,7 @@ Prefix and suffix are necessary to extract only the trait name (e.g. "height", "
     `--pos`: Name of genetic position column in GWAS summary statistics (default: GENPOS)\
 While all the listed options are quite relevant, they are not strictly essential: for example, if your GWAS summary statistics have been created using the [GAU Regenie pipeline](https://gitlab.fht.org/genome-analysis-unit/nf-pipeline-regenie) and you are happy with having a `"loci_identification"` directory created in the parent directory of your input folder, then you are fine with defaul arguments.\
     `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: LOG10P)\
-This can either be the raw p-value or the log10 transformed one.\ 
+This can either be the raw p-value or the log10 transformed one\
     `--sig_pval`: Significant p-value threshold for top hits (default:5e-08)\
     `--limit`: P-value threshold for loci borders (default: 1e-05)\
     `--hole`: Minimum pair-base distance between SNPs in different loci (default: 250000)
