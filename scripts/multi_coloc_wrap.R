@@ -107,12 +107,12 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
   chr=loci.table.tmp$chr[1]
 # Set universal mapping files (created by Edo, 1000genomes+HRC+TOPMed)
   if(unique(loci.table.tmp$grch)==38){
-    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh38_sorted.tsv.gz"
+    mappa="https://zenodo.org/records/10142577/files/Full_variant_map.GRCh38_sorted.tsv.gz"
   }
   if(unique(loci.table.tmp$grch)==37){
-    mappa="/project/snip/reference_panels_map/Full_variant_map.GRCh37_sorted.tsv.gz"
+    mappa="https://zenodo.org/records/10142577/files/Full_variant_map.GRCh37_sorted.tsv.gz"
   }
-  system(paste0(opt$tabix, " -h ",mappa," chr",chr,":",start,"-",end," > ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
+  system(paste0(opt$tabix, " -h -D ",mappa," chr",chr,":",start,"-",end," > ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
 # Load local map and format  
   mappa.loc <- fread(paste0(opt$output, "/locus_",locus,"_mappa.loc.tsv"), data.table=F) %>%
     select("#chromosome", contains(as.character(unique(loci.table.tmp$grch))))
