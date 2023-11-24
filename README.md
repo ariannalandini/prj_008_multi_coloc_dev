@@ -215,7 +215,7 @@ sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch
 
 The final outcome can be summarised by the following plot:
 
-![Alt text](locus_1_results_summary_plot.png)
+![locus_1_results_summary_plot](https://github.com/ariannalandini/prj_008_multi_coloc_dev/assets/43240476/431ebcd7-6eac-486a-95b3-def28b0437ab)
 
 Each dot in the top panel represent the effect size and direction of the most likely causal SNP for that association signals. Multiple dots on the same horizontal line indicate that, for the same trait reported on the y axis, multiple independent association signal have been found in the same genomic regions. Multiple dots aligned on the same vertical line indicate that association signals colocalise (PPH4 > 0.9) accross multiple traits.
 
