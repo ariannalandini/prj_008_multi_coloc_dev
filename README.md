@@ -120,7 +120,7 @@ Then run specifying the number of traits (29 in this example)
 ```
 sbatch ./prj_008_multi_coloc_dev/cntl/p09_locus_breaker.sbatch --array=1-29
 ```
-To obtain pan loci, aggregating multiple traits overlapping loci in a single locus, provide the path where your trait-specific loci are located as argument to the `--loci_path` option in the `p10_locus_lister.sbatch`
+To define the boundaries of genomic regions aggregating multiple traits overlapping loci, provide the path where your trait-specific loci are located as argument to the `--loci_path` option in the `p10_locus_lister.sbatch`
 
 ```
 Rscript prj_008_multi_coloc_dev/scripts/locus_lister_wrap.R \
@@ -142,10 +142,91 @@ sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch --array=1-1328%100
 ```
 <br>
 <br>
+<br>
+
+## Example
+
+The `example-data` folder contains the GWAS summary statistics for BMI, height, stroke, sex hormone binding globulin (SHBG) and appendicular lean mass (originally downloaded from the [IEU OpenGWAS project](https://gwas.mrcieu.ac.uk/), with study ids ukb-b-2303, ieu-a-89, ebi-a-GCST005838, ieu-b-4870 and ebi-a-GCST90000025), filtered, for the sake of this tutorial, for a specific region in chromosome 1 (from 10546866 to 11576788 bp).
+The same folder contains also the LD reference panel from UKBB (GRCh37), in plink format files, filtered for the same region.
+
+GWAS summary statistics have been formatted to include not only standard info (CHROM, GENPOS, ID, ALLELE0,ALLELE1, A1FREQ, N, BETA, SE and LOG10P), but also columns later needed for the colocalisation analysis: trait, path, type, sdY, s, grch and bfile.
+
+As described above, you'll need first to clone the git repository and conda environment
+```
+### Perform the test analysis in "example-data_test" directory
+mkdir -p example-data_test/logs
+cd example-data_test
+git clone -b development https://gitlab.fht.org/biostatistics-unit/prj_008_multi_coloc_dev.git
+conda env create -f ./prj_008_multi_coloc_dev/coloc_pipe_env.yml
+```
+<br>
+
+Few adjustment are needed before starting right away:
+
+1) You might need to add in `prj_008_multi_coloc_dev/cntl/p09_locus_breaker.sbatch`, `p10_locus_lister.sbatch` and `p11_multi_coloc.sbatch` files the path to the conda environment `coloc_pipe_env` you just created:
+```
+conda activate /path/to/cond/env/coloc_pipe_env
+```
+<br>
+
+2) In `p11_multi_coloc.sbatch`, you need to specify the paths to the following softwares  
+```
+    --tabix_bin "/path/to/software/htslib-tools/1.14/tabix" \
+    --plink2_bin "/path/to/software/plink/2.00_20211217/plink2" \
+    --gcta_bin "/path/to/software/GCTA/1.94.0beta/gcta64"
+```
+<br>
+
+Now you're ready to go!
+
+1) To identify trait-specific association loci, run:
+```
+sbatch ./prj_008_multi_coloc_dev/cntl/p09_locus_breaker.sbatch
+```
+For each trait, a loci table will be generated in the `example-data/p09_locus_breaker` folder. As example, this how the `height_loci.tsv` should look like:
+
+| chr |   start  |    end   |  GENPOS  |     ID     | ALLELE0 | ALLELE1 | A1FREQ |   N    |  BETA  |   SE   |  LOG10P |  trait |                                  path                                 | type  | sdY | s  | grch |                                  bfile                                 |   P   |
+|-----|----------|----------|----------|------------|---------|---------|--------|--------|--------|--------|---------|--------|-----------------------------------------------------------------------|-------|-----|----|------|------------------------------------------------------------------------|-------|
+|  1  | 11102275 | 11326788 | 11284336 | rs10779751 |    A    |    G    | 0.708  | 253192 | -0.021 | 0.0032 | 9.69897 | height | ./prj_008_multi_coloc_dev/example-data/height.1_10546866_11576788.tsv | quant | NA  | NA |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 | 2e-10 |
+<br>
+
+2) To collapse trait-specific loci, overlapping across multiple traits, into a single genomic region, run:
+```
+sbatch ./prj_008_multi_coloc_dev/cntl/p10_locus_lister.sbatch
+```
+ Here how the genomic regions table `p10_locus_lister/example-data_all_loci.tsv ` should look like:
+
+| chr |   start  |    end   |  GENPOS  |      ID      | ALLELE0 | ALLELE1 | A1FREQ |   N    |   BETA  |   SE   |  LOG10P |          trait         |                                          path                                         | type  | sdY |   s   | grch |                                  bfile                                 |     P    | pan_locus |    pan_locus_name   |
+|-----|----------|----------|----------|--------------|---------|---------|--------|--------|---------|--------|---------|------------------------|---------------------------------------------------------------------------------------|-------|-----|-------|------|------------------------------------------------------------------------|----------|-----------|---------------------|
+|  1  | 11102275 | 11326788 | 11284336 |  rs10779751  |    A    |    G    | 0.708  | 253192 | -0.021  | 0.0032 | 9.69897 |         height         |         ./prj_008_multi_coloc_dev/example-data/height.1_10546866_11576788.tsv         | quant |  NA |   NA  |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 |  2e-10   |     1     | 1_10547263_11387192 |        |
+|  1  | 10547263 | 11387192 | 11129317 |  rs2791654   |    G    |    A    | 0.7062 | 450243 | -0.0239 | 0.0022 | 27.9187 | appendicular_lean_mass | ./prj_008_multi_coloc_dev/example-data/appendicular_lean_mass.1_10546866_11576788.tsv | quant |  NA |   NA  |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 | 1.21e-2  |     1     | 1_10547263_11387192 |
+|  1  | 10719645 | 11360957 | 11207269 |  rs2791643   |    C    |    T    | 0.7618 | 454884 | -0.0129 | 0.0023 | 7.55284 |           bmi          |           ./prj_008_multi_coloc_dev/example-data/bmi.1_10546866_11576788.tsv          | quant |  NA |   NA  |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 | 2.81e-8  |     1     | 1_10547263_11387192 |
+|  1  | 11067792 | 11365015 | 11126941 | rs1279191368 |    C    |    T    | 0.7428 | 214989 | -0.0231 | 0.0034 | 11.1805 |          shbg          |          ./prj_008_multi_coloc_dev/example-data/shbg.1_10546866_11576788.tsv          | quant |  NA |   NA  |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 | 6.6e-12  |     1     | 1_10547263_11387192 |
+|  1  | 10787538 | 10799577 | 10796866 |   rs880315   |    T    |    C    |   0.4  | 446696 |  0.0527 | 0.0084 | 9.44141 |         stroke         |         ./prj_008_multi_coloc_dev/example-data/stroke.1_10546866_11576788.tsv         |  cc   |  NA | 0.091 |  37  | ./prj_008_multi_coloc_dev/example-data/ukbb_1_10546866_11576788_grch37 | 3.62e-10 |     1     | 1_10547263_11387192 |
+
+While `start` and `end` identify the original boundiares of the trait-specific locus, `pan_locus_name` reports the boundaries of the genomic region, overlapping and including all trait-specific loci having the same `pan_locus`
+
+<br>
+
+3) Finally, to perform colocalisation and finemapping of all traits included in each genomic region previsouly identified, run:
+```
+sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch
+```
+
+The final outcome can be summarised by the following plot:
+
+![Alt text](locus_1_results_summary_plot.png)
+
+Each dot in the top panel represent the effect size and direction of the most likely causal SNP for that association signals. Multiple dots on the same horizontal line indicate that, for the same trait reported on the y axis, multiple independent association signal have been found in the same genomic regions. Multiple dots aligned on the same vertical line indicate that association signals colocalise (PPH4 > 0.9) accross multiple traits.
+
+In this example, the complex association pattern has been "broken down" into multiple independent signals for height, bmi and appendicular lean mass, while stroke and shbg report only one association signal. One signal from appendicular lean mass colocalises (PPH4 > 0.9) with stroke's association signal (representative SNP rs17035646), while another (independent) signal from appendicular lean mass with shgb (representative SNP rs1211575). In both cases, they have consistent direction of effect.
+
+<br>
+<br>
 
 ## Options in details
 
-1) Identification of trait-specific loci
+1) `p09_locus_breaker.sbatch` : identification of trait-specific loci
 
 To identify the associated loci specific to each trait in a list, run the **`prj_008_multi_coloc_dev/cntl/p09_locus_breaker.sbatch`** script, providing:\
     `--path`: path to directory or multiple (comma separated) directories where GWAS summary statistics for all your traits of interest are located.\
@@ -167,7 +248,7 @@ Finally, specify the number of traits (whose GWAS summary statistics are present
 <br>
 
 
-2) Collapsing of across traits overlapping loci into larger genomic regions
+2) `p10_locus_lister.sbatch` : collapsing of across traits overlapping loci into larger genomic regions
 
 To collapse overlapping loci from multiple traits into genomic regions, run the **`prj_008_multi_coloc_dev/cntl/p10_locus_lister.sbatch`** script, providing:\
     `--loci_path`: path to directory where all trait-specific loci table created by the previous step are stored.\
@@ -176,7 +257,7 @@ Note this is the only essential option, if not provided the script will throw an
 <br>
 
 
-3) Run colocalisation and fine mapping
+3) `prj_008_multi_coloc_dev` : running colocalisation analysis and fine mapping
 
 To perform association signals​ untangling, colocalisation and fine mapping, run the **`prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch`** script, providing:\
     `--input`: path and name of the pan loci table previously created.\
@@ -195,7 +276,10 @@ Note these are the only options with no default, if not provided the script will
     `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: "P") \
     `--maf`: Minor allele frequency (MAF) thershold removing variants below the set threshold from the analysis (default: 0.0001) \
     `--bfile`: Path and prefix name of custom LD reference bfiles (PLINK format .bed .bim .fam) (default: LD reference from 30k UKBB TOPMed imputed genotypes). **NB:**this option will be overriden if LD reference bfiles are provided also in the input loci table \
-    `--save_inter_files`: Whether to save intermediate munged summary statsistics and condiotioned datasets as R objects (default: FALSE)
+    `--save_inter_files`: Whether to save intermediate munged summary statsistics and condiotioned datasets as R objects (default: FALSE) \
+    `--tabix_bin`: Path to tabix software \
+    `--plink2_bin`: Path to plink2 software \
+    `--gcta_bin`: Path to GCTA software
 
 Finally, specify the number of genomic regions (identified in the previous step) for which the script should be run in the `#SBATCH --array` option.
 <br>
@@ -248,7 +332,7 @@ Sodbo Sharapov ([sodbo.sharapov@fht.org](sodbo.sharapov@fht.org))
 ## To do
 
 General:
-- Create conda environment for R packages needed (easyGgplot2 and ggnet are the only packages not supported in conda. easyGgplot2 really needed? May ggnet be replaced by ggnetwork?)
+- ~~Create conda environment for R packages needed (easyGgplot2 and ggnet are the only packages not supported in conda. easyGgplot2 really needed? May ggnet be replaced by ggnetwork?)~~ DONE
 <br>
 
 Locus identification:
@@ -267,11 +351,11 @@ Coloc (ideally in priority order?):
 - Add legend/scale of effect size in the final summary plot
 - Cluster/rank traits by correlation in the final summary plot
 - Check munging function to set "essential" info and "optional" info (code will run anyway if only essential info are provided)
-- What about COJO collinearity? --> Use tryCatch()
+- ~~What about COJO collinearity? --> Use tryCatch()~~ DONE
 - Improve naming consistency:
     1) pan.locus and sub_locus --> either use "." or "_"
     2) sub loci are somentimes called "sub_locus" and sometimes "g1"
-- Include example data to test the pipeline?
+- ~~Include example data to test the pipeline?~~ DONE
 - ~~Patch `coloc.abf()` function to account for sample overlap~~ No need according to Sodbo's simulations
 - ~~Slim down output files? --> Implement new p-value filter~~ DONE
 - ~~Include possibility to perform coloc on a specified custom region (skipping locus.breaker and locus.lister steps)~~ DONE - possible to skip p09 and p10 steps and provide costum loci table
