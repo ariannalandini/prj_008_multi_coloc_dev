@@ -28,45 +28,11 @@ Clone this repository:\
 
 Create a `logs` directory (**REQUIRED**):\
 `mkdir logs`
+
+Create conda environment:\
+`conda env create -f ./prj_008_multi_coloc_dev/coloc_pipe_env.yml`
 <br>
 <br>
-
-## Software requirments
-
-`R/4.1.0`
-
-    CRAN packages:
-    optparse
-    data.table
-    r.utils
-    tidyr
-    corrplot
-    bigsnpr
-    ggplot2
-    cowplot
-    igraph
-    RColorBrewer
-    patchwork
-    stringi
-    reshape2
-    plyr
-    purrr
-    dplyr
-    coloc v.5.1.0
-    
-    Bioconductor packages:
-    Gviz
-    EnsDb.Hsapiens.v75
-    GenomicRanges
-
-**Please make sure to have coloc v.5.1.0! Conda environment is coming soon!**
-
-[tabix](https://www.htslib.org/doc/tabix.html) \
-[GCTA](https://yanglab.westlake.edu.cn/software/gcta/#Overview)\
-[plink2](https://www.cog-genomics.org/plink/2.0/)\
-<br>
-<br>
-
 
 ## Required inputs
 
@@ -138,7 +104,7 @@ In cases where users opt to not modify the GWAS summary statistics, the `type`, 
 Custom LD references can be provided in plink format (.bed, .bim, .fam), and  can be either specified in the input loci table (higher flexibility, allows for multiple, GWAS-specific, LD references) or as script option (fast and easy for one-fits-all LD reference). Please note that the GWAS summary statistics and the corresponding LD reference should be expressed in the same human genome build.
 Please check [this link](https://yanglab.westlake.edu.cn/software/gcta/#COJO) for raccomandations regarding the choice of reference sample for GCTA-COJO analysis.
 
-~~By default, LD reference from 30k UKBB TOPMed imputed genotypes will be used.~~
+By default, LD reference from 30k UKBB TOPMed imputed genotypes will be used.
 <br>
 <br>
 <br>
@@ -192,7 +158,7 @@ Prefix and suffix are necessary to extract only the trait name (e.g. "height", "
     `--pos`: Name of genetic position column in GWAS summary statistics (default: GENPOS)\
 While all the listed options are quite relevant, they are not strictly essential: for example, if your GWAS summary statistics have been created using the [GAU Regenie pipeline](https://gitlab.fht.org/genome-analysis-unit/nf-pipeline-regenie) and you are happy with having a `"loci_identification"` directory created in the parent directory of your input folder, then you are fine with defaul arguments.\
     `--pvalue`: Name of p-value of effect column in GWAS summary statistics (default: LOG10P)\
-This can either be the raw p-value or the log10 transformed one\
+This can either be the raw p-value or the log10 transformed one.\ 
     `--sig_pval`: Significant p-value threshold for top hits (default:5e-08)\
     `--limit`: P-value threshold for loci borders (default: 1e-05)\
     `--hole`: Minimum pair-base distance between SNPs in different loci (default: 250000)
@@ -254,10 +220,9 @@ locus_15_conditioned_loci.pdf\
 Visualising the assocation pattern "dissecting" process for each tested trait.
 
 locus_15_pleiotropy_table.pdf
-Z-scores "heatmap" of top SNPs submitted to colocalisation analysis
 
 locus_15_colocalization_plot.pdf\
-Regional Manhattan plot of colocalising traits (colocalising traits in the same colour)
+Regional Manhattan plot of colocalising traits.
 
 locus_15_results_summary_plot.png\
 Reporting all independent signals and traits associated at the locus, summarising the colocalising ones and placing them in the context of the chromosome (with genes annotation).

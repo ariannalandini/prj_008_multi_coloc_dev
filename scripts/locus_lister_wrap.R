@@ -1,13 +1,10 @@
 #### Pietro's script to identify overlapping loci across multiple traits and collapse them in a mega locus
 
-### Function
+suppressMessages(library(optparse))
+suppressMessages(library(data.table))
+suppressMessages(library(GenomicRanges))
+suppressMessages(library(dplyr))
 source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
-
-### Load necessary packages, if not available install them first
-package_list <- c("optparse", "data.table", "GenomicRanges", "dplyr")
-for(package in package_list){
-  package.loader(package)
-}
 
 ### Set arguments
 option_list <- list(

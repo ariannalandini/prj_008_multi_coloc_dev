@@ -1,22 +1,26 @@
-### Multicoloc
-### detach all loaded packages
-#lapply(paste("package:", names(sessionInfo()$otherPkgs), sep=""), 
-#       detach, 
-#       character.only = TRUE, 
-#       unload = TRUE)
-
-
+# Load packages and source functions
+suppressMessages(library(optparse))
+suppressMessages(library(data.table))
+suppressMessages(library(R.utils))
+suppressMessages(library(corrplot))
+suppressMessages(library(coloc))
+suppressMessages(library(bigsnpr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(cowplot))
+suppressMessages(library(stringi))
+suppressMessages(library(patchwork))
+suppressMessages(library(reshape2))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(igraph))
+suppressMessages(library(purrr))
+suppressMessages(library(tidyr))
+suppressMessages(library(plyr))
+suppressMessages(library(Gviz))
+suppressMessages(library(EnsDb.Hsapiens.v75))
+suppressMessages(library(dplyr))
 source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
-### Load necessary packages, if not available install them first
-package_list <- c("optparse","data.table","tidyr","corrplot","coloc","bigsnpr","ggplot2",#"easyGgplot2",
-"cowplot","igraph","RColorBrewer",#"ggnet",
-"patchwork","stringi","reshape2","plyr","Gviz","EnsDb.Hsapiens.v75","purrr","dplyr")
-for(package in package_list){
-  package.loader(package)
-}
-
-
+# Get arguments specified in the sbatch
 option_list <- list(
   make_option("--input", type="character", default=NULL, 
               help="Pan loci table created by the locuslister R function or provided by user", metavar="character"),
@@ -56,16 +60,9 @@ option_list <- list(
               help="Path to plink2 software", metavar="character"),
   make_option("--gcta_bin", type="character", default="/ssu/gassu/software/GCTA/1.94.0beta/gcta64", 
               help="Path to GCTA software", metavar="character")
-); 
-
+);
 opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
-
-########### to delete
-#opt$input="/group/pirastu/prj_004_variant2function/gwas_topmed_rap/mh_and_loci/ukbb_topmed_all_loci.tsv"
-#opt$output="/group/pirastu/prj_004_variant2function/coloc/multi_coloc"
-#opt$grch=38
-###########
 
 ## Locus defined by array job
 locus <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
@@ -273,8 +270,11 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
         }
         x$varbeta=x$varbeta^2
         x=na.omit(x)
-        # Finemap  
-        fine.res <- finemap.abf.new(x) %>% #### finemap.abf function taken from latest coloc version! coloc 5.2.2
+        # Finemap
+        x <- as.list(x) ### move to list and keep unique value of type otherwise ANNOYING ERROR!
+        x$type <- unique(x$type)
+        if(x$type=="cc"){x$s <- unique(x$s)}
+        fine.res <- finemap.abf(x) %>%
           arrange(desc(SNP.PP)) %>% 
           mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
           # Add trait and cojo_hit info, to merge with loci table later

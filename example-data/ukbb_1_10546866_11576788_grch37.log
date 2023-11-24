@@ -1,0 +1,28 @@
+PLINK v1.90b6.24 64-bit (6 Jun 2021)
+Options in effect:
+  --bfile /processing_data/shared_datasets/ukbiobank/genotypes/LD_reference/ld_reference_bfiles/ukbb_all_30000_random_unrelated_white_british
+  --chr 1
+  --from-bp 10546866
+  --make-bed
+  --out ./ukbb_1_10546866_11576788_grch37
+  --to-bp 11576788
+
+Hostname: hnode02
+Working directory: /group/pirastu/prj_004_variant2function/ukbb_blood_coloc_021023/data
+Start time: Thu Nov 23 15:34:47 2023
+
+Random number seed: 1700750087
+385179 MB RAM detected; reserving 192589 MB for main workspace.
+12460 out of 31349868 variants loaded from .bim file.
+29941 people (13772 males, 16169 females) loaded from .fam.
+Using 1 thread (no multithreaded calculations invoked).
+Before main variant filters, 29941 founders and 0 nonfounders present.
+Calculating allele frequencies... done.
+Total genotyping rate is exactly 1.
+12460 variants and 29941 people pass filters and QC.
+Note: No phenotypes present.
+--make-bed to ./ukbb_1_10546866_11576788_grch37.bed +
+./ukbb_1_10546866_11576788_grch37.bim + ./ukbb_1_10546866_11576788_grch37.fam
+... done.
+
+End time: Thu Nov 23 15:34:57 2023

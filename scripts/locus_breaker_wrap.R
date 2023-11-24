@@ -1,14 +1,7 @@
-#!/usr/bin/env Rscript
-
-### Load functions
+suppressMessages(library(optparse))
+suppressMessages(library(data.table))
+suppressMessages(library(dplyr))
 source("prj_008_multi_coloc_dev/scripts/loci_identification_funs.R")
-
-### Load necessary packages, if not available install them first
-package_list <- c("optparse", "data.table", "dplyr")
-for(package in package_list){
-  package.loader(package)
-}
-
 
 ### Array job
 num <- as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID'))
@@ -23,9 +16,9 @@ option_list <- list(
               help="Suffix to the trait in the file name (will be removed)", metavar="character"),  
   make_option("--out", type="character", default=NULL, 
               help="Path and prefix of output files", metavar="character"),
-  make_option("--sig_pval", type="numeric", default=5e-08, 
+  make_option("--sig_pval", type="double", default=5e-08, 
               help="Significant p-value threshold for top hits", metavar="numeric"),
-  make_option("--limit", type="numeric", default=1e-05, 
+  make_option("--limit", type="double", default=1e-05, 
               help="P-value threshold for loci borders", metavar="numeric"),  
   make_option("--hole", type="integer", default=250000,
               help="Minimum pair-base distance between SNPs in different loci", metavar="integer"),
@@ -109,7 +102,5 @@ if(any(sum_stat[[opt$pvalue]] < opt$sig_pval)){
   trait_name <- trait_name[which(!grepl("/", trait_name))]
   cat(paste0("\nNo SNP passed the significant p-value thershold set for trait ", trait_name))
 }
-
-
 
 cat("\n**** DONE!! ****\n")

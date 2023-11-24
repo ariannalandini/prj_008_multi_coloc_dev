@@ -82,10 +82,6 @@ locus.breaker <- function(
 locus.lister <- function(
   my_path_loci=NULL,
   out="./panlocus_table.tsv"){
-  
-#  require(data.table)
-#  require(GenomicRanges)
-#  require(dplyr)
 
   loci_list <- list.files(path=my_path_loci, pattern="*_loci.tsv", full.names=T)
   all_loci <- as.data.frame(rbindlist(lapply(loci_list, function(x) fread(x, data.table=F)), fill=TRUE))

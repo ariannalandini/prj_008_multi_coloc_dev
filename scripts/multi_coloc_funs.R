@@ -1,20 +1,3 @@
-###library(qgraph)
-###library(susieR)
-#suppressMessages(library(corrplot))
-#suppressMessages(library(coloc))
-#suppressMessages(library(data.table))
-#suppressMessages(library(bigsnpr))
-#suppressMessages(library(ggplot2))
-#suppressMessages(library(easyGgplot2))
-#suppressMessages(library(igraph))
-#suppressMessages(library(RColorBrewer))
-#suppressMessages(library(ggnet))
-#suppressMessages(library(patchwork))
-#suppressMessages(library(stringi))
-#suppressMessages(library(plyr))
-#suppressMessages(library(dplyr))
-
-
 ### load_and_check_input ###
 load_and_check_input <- function(opt, locus){
 ## Throw error message - munged GWAS summary statistics file MUST be provided!
@@ -105,7 +88,7 @@ load_and_check_input <- function(opt, locus){
   
 # Check tyoe column  
   ### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
-  if(!(unique(loci.table.tmp$type) %in% c("cc", "quant"))){
+  if(!all((unique(loci.table.tmp$type) %in% c("cc", "quant")))){
     stop("Type has been defined incorrectly - it has to be either 'cc' or 'quant'", call.=FALSE)
   }
   return(loci.table.tmp)
@@ -364,9 +347,7 @@ cojo.ht=function(D=datasets[[1]]
 
 ### plot.cojo.ht ###
 plot.cojo.ht=function(cojo.ht.obj){
-#  library(ggplot2)
-#  library(patchwork)
-  
+
   if(nrow(cojo.ht.obj$ind.snps)>1){
     
     whole.dataset=c()
@@ -424,7 +405,7 @@ coloc.prep.table=function(pairwise.list, conditional.datasets, loci.table.tmp,ma
       tmp$othA[n]=alleles[!(alleles%in%tmp$refA[n])]
     }
     tmp
-  })))
+  }), fill=TRUE))
   return(final.locus.table.tmp)
 }
 
@@ -483,7 +464,14 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
         
-        colo.res <- coloc.abf.ht(D1,D2)
+        D1 <- as.list(D1) ### move to list and keep unique value of type otherwise ANNOYING ERROR!
+        D2 <- as.list(D2)
+        D1$type <- unique(D1$type)
+        D2$type <- unique(D2$type)
+        if(D1$type=="cc"){D1$s <- unique(D1$s)}
+        if(D2$type=="cc"){D2$s <- unique(D2$s)}
+        
+        colo.res <- coloc.abf(D1,D2)
 ## Save coloc summary        
         colo.sum=data.frame(t(colo.res$summary))
         colo.sum$hit1=i
@@ -624,7 +612,6 @@ locus.joyplot=function(x, window.size=10000, susie.res=susie.list){
     start=start+window.size/2
   }
   
-#  library(reshape2)
   res.all=as.data.frame(res.all)
   ordine=hclust(as.dist(1-cor(as.matrix(res.all[,-1]),use ="pairwise.complete.obs")),method = "ward.D2")$order
   ordine=(names(res.all)[-1]) [ordine]
@@ -1065,212 +1052,3 @@ final.plot <- function(locus,
   ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
-
-
-#################### Coloc functions modified to accept dataframes (and not only lists)
-
-#### coloc.abf.ht
-coloc.abf.ht <- function(dataset1, dataset2, MAF=NULL, 
-                         p1=1e-4, p2=1e-4, p12=1e-5) {
-  
-  if(!("MAF" %in% names(dataset1)) & !is.null(MAF))
-    dataset1$MAF <- MAF
-  if(!("MAF" %in% names(dataset2)) & !is.null(MAF))
-    dataset2$MAF <- MAF
-  check_dataset.ht(d=dataset1,1)
-  check_dataset.ht(d=dataset2,2)
-  
-  df1 <- process.dataset.ht(d=dataset1, suffix="df1")
-  df2 <- process.dataset.ht(d=dataset2, suffix="df2")
-  merged.df <- merge(df1,df2)
-
-  if(!nrow(merged.df))
-    stop("dataset1 and dataset2 should contain the same snps in the same order, or should contain snp names through which the common snps can be identified")
-  
-  merged.df$internal.sum.lABF <- with(merged.df, lABF.df1 + lABF.df2)
-  my.denom.log.abf <- coloc:::logsum(merged.df$internal.sum.lABF)
-  merged.df$SNP.PP.H4 <- exp(merged.df$internal.sum.lABF - my.denom.log.abf)
-  
-  pp.abf <- coloc:::combine.abf(merged.df$lABF.df1, merged.df$lABF.df2, p1, p2, p12)  
-  common.snps <- nrow(merged.df)
-  results <- c(nsnps=common.snps, pp.abf)
-  
-  output<-list(summary=results,
-               results=merged.df,
-               priors=c(p1=p1,p2=p2,p12=p12))
-  class(output) <- c("coloc_abf",class(output))
-  return(output)
-}
-
-
-#### check_dataset.ht
-check_dataset.ht <- function (d, suffix = "", req = c("snp"), warn.minp = 1e-06) 
-{
-  if (!is.list(d)) 
-    stop("dataset ", suffix, ": is not a list")
-  nd <- names(d)
-  n <- 0
-  for (v in nd) {
-    if (v %in% req && !(v %in% nd)) 
-      stop("dataset ", suffix, ": missing required element ", 
-           v)
-    if (any(is.na(d[[v]]))) 
-      stop("dataset ", suffix, ": ", v, " contains missing values")
-  }
-  if ("snp" %in% nd && any(duplicated(d$snp))) 
-    stop("dataset ", suffix, ": duplicated snps found")
-  if ("snp" %in% nd && is.factor(d$snp)) 
-    stop("dataset ", suffix, ": snp should be a character vector but is a factor")
-  if ("MAF" %in% nd && (!is.numeric(d$MAF) || any(is.na(d$MAF)) || 
-                        any(d$MAF <= 0) || any(d$MAF >= 1))) 
-    stop("dataset ", suffix, ": MAF should be a numeric, strictly >0 & <1")
-  l <- -1
-  shouldmatch <- c("pvalues", "MAF", "beta", "varbeta", "snp", 
-                   "position")
-  for (v in shouldmatch) if (v %in% nd) 
-    if (l < 0) {
-      l <- length(d[[v]])
-    }
-  else {
-    if (length(d[[v]]) != l) {
-      stop("dataset ", suffix, ": lengths of inputs don't match: ")
-      print(intersect(nd, shouldmatch))
-    }
-  }
-  if (("N" %in% req) && (!("N" %in% nd) || is.null(d$N) || 
-                         is.na(d$N))) 
-    stop("dataset ", suffix, ": sample size N not set")
-  if (!("type" %in% nd)) 
-    stop("dataset ", suffix, ": variable type not set")
-  if (!(d$type[[1]] %in% c("quant", "cc"))) 
-    stop("dataset ", suffix, ": ", "type must be quant or cc")
-  if (("s" %in% nd) && (!is.numeric(d$s) || d$s <= 0 || d$s >= 
-                        1)) 
-    stop("dataset ", suffix, ": ", "s must be between 0 and 1")
-  if (!("beta" %in% nd) || !("varbeta" %in% nd)) {
-    if (!("pvalues" %in% nd) || !("MAF" %in% nd)) 
-      stop("dataset ", suffix, ": ", "require p values and MAF if beta, varbeta are unavailable")
-    if (d$type[[1]] == "cc" && !("s" %in% nd)) 
-      stop("dataset ", suffix, ": ", "require, s, proportion of samples who are cases, if beta, varbeta are unavailable")
-    p = d$pvalues
-  }
-  else {
-    p = pnorm(-abs(d$beta/sqrt(d$varbeta))) * 2
-  }
-  if (min(p) > warn.minp) 
-    warning("minimum p value is: ", format.pval(min(p)), 
-            "\nIf this is what you expected, this is not a problem.\nIf this is not as small as you expected, please check the 02_data vignette.")
-  if (d$type[[1]] == "quant" && !("sdY" %in% nd)) 
-    if (!("MAF" %in% nd && "N" %in% nd)) 
-      stop("dataset ", suffix, ": ", "must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
-  if ("LD" %in% nd) {
-    if (nrow(d$LD) != ncol(d$LD)) 
-      stop("LD not square")
-    if (!identical(colnames(d$LD), rownames(d$LD))) 
-      stop("LD rownames != colnames")
-    if (length(setdiff(d$snp, colnames(d$LD)))) 
-      stop("colnames in LD do not contain all SNPs")
-  }
-  NULL
-}
-
-
-#### process.dataset.ht
-process.dataset.ht <- function(d, suffix) {
-  nd <- names(d)
-  if (!"type" %in% nd) 
-    stop("dataset ", suffix, ": ", "The variable type must be set, otherwise the Bayes factors cannot be computed")
-  if (!(d$type[[1]] %in% c("quant", "cc"))) 
-    stop("dataset ", suffix, ": ", "type must be quant or cc")
-  if (d$type[[1]] == "cc" & "pvalues" %in% nd) {
-    if (!("s" %in% nd)) 
-      stop("dataset ", suffix, ": ", "please give s, proportion of samples who are cases, if using p values")
-    if (!("MAF" %in% nd)) 
-      stop("dataset ", suffix, ": ", "please give MAF if using p values")
-    if (d$s[[1]] <= 0 || d$s[[1]] >= 1) 
-      stop("dataset ", suffix, ": ", "s must be between 0 and 1")
-  }
-  if (d$type[[1]] == "quant") {
-    if (!("sdY" %in% nd || ("MAF" %in% nd && "N" %in% nd))) 
-      stop("dataset ", suffix, ": ", "must give sdY for type quant, or, if sdY unknown, MAF and N so it can be estimated")
-  }
-  if ("beta" %in% nd && "varbeta" %in% nd) {
-    if (length(d$beta) != length(d$varbeta)) 
-      stop("dataset ", suffix, ": ", "Length of the beta vectors and variance vectors must match")
-    if (!("snp" %in% nd)) 
-      d$snp <- sprintf("SNP.%s", 1:length(d$beta))
-    if (length(d$snp) != length(d$beta)) 
-      stop("dataset ", suffix, ": ", "Length of snp names and beta vectors must match")
-    if (d$type[[1]] == "quant" && !("sdY" %in% nd)) 
-      d$sdY <- coloc:::sdY.est(d$varbeta, d$MAF, d$N)
-    df <- coloc:::approx.bf.estimates(z = d$beta/sqrt(d$varbeta), 
-                              V = d$varbeta, type = d$type[[1]], suffix = suffix, sdY = d$sdY[[1]])
-    df$snp <- as.character(d$snp)
-    if ("position" %in% nd) 
-      df <- cbind(df, position = d$position)
-    return(df)
-  }
-  if ("pvalues" %in% nd & "MAF" %in% nd & "N" %in% nd) {
-    if (length(d$pvalues) != length(d$MAF)) 
-      stop("Length of the P-value vectors and MAF vector must match")
-    if (!("snp" %in% nd)) 
-      d$snp <- sprintf("SNP.%s", 1:length(d$pvalues))
-    df <- data.frame(pvalues = d$pvalues, MAF = d$MAF, N = d$N, 
-                     snp = as.character(d$snp))
-    snp.index <- which(colnames(df) == "snp")
-    colnames(df)[-snp.index] <- paste(colnames(df)[-snp.index], 
-                                      suffix, sep = ".")
-    keep <- which(df$MAF > 0 & df$pvalues > 0)
-    df <- df[keep, ]
-    abf <- coloc:::approx.bf.p(p = df$pvalues, f = df$MAF, type = d$type[[1]], 
-                       N = df$N, s = d$s, suffix = suffix)
-    df <- cbind(df, abf)
-    if ("position" %in% nd) 
-      df <- cbind(df, position = d$position[keep])
-    return(df)
-  }
-  stop("Must give, as a minimum, one of:\n(beta, varbeta, type, sdY)\n(beta, varbeta, type, MAF)\n(pvalues, MAF, N, type)")
-}
-
-################# coloc::finemap.abf() from coloc_5.1.0 was causing in some cases to have NA SNP.PP. Bug seem fixed in latest version (coloc_5.2.2)
-
-adjust_prior=function(p,nsnps,suffix="") {
-  if(nsnps * p >= 1) { ## for very large regions
-    warning(paste0("p",suffix," * nsnps >= 1, setting p",suffix,"=1/(nsnps + 1)"))
-    1/(nsnps + 1)
-  } else {
-    p
-  }
-}
-
-finemap.abf.new <- function(dataset, p1=1e-4) {
-  
-  coloc:::check_dataset(dataset,"")
-  
-  df <- coloc:::process.dataset(d=dataset, suffix="")
-  nsnps <- nrow(df)
-  p1=adjust_prior(p1,nsnps,"1")
-  
-  dfnull <- df[1,]
-  for(nm in colnames(df))
-    dfnull[,nm] <- NA
-  dfnull[,"snp"] <- "null"
-  dfnull[,"lABF."] <- 0
-  df <- rbind(df,dfnull)
-  ## data.frame("V."=NA,
-  ##            z.=NA,
-  ##            r.=NA,
-  ##            lABF.=1,
-  ##            snp="null"))
-  df$prior <- c(rep(p1,nsnps),1-nsnps*p1)
-  
-  ## add SNP.PP.H4 - post prob that each SNP is THE causal variant for a shared signal
-  ## BUGFIX 16/5/19
-  ## my.denom.log.abf <- coloc:::logsum(df$lABF + df$prior)
-  ## df$SNP.PP <- exp(df$lABF - my.denom.log.abf)
-  my.denom.log.abf <- coloc:::logsum(df$lABF + log(df$prior))
-  df$SNP.PP <- exp(df$lABF + log(df$prior) - my.denom.log.abf)
-  
-  return(df)
-}
-
