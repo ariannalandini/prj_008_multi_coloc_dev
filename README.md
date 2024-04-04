@@ -24,7 +24,7 @@ Navigate to your project folder:\
 `cd your_project_folder`
 
 Clone this repository:\
-`git clone -b development https://gitlab.fht.org/biostatistics-unit/prj_008_multi_coloc_dev.git`
+`git clone -b development https://github.com/ariannalandini/prj_008_multi_coloc_dev.git`
 
 Create a `logs` directory (**REQUIRED**):\
 `mkdir logs`
@@ -215,11 +215,11 @@ sbatch ./prj_008_multi_coloc_dev/cntl/p11_multi_coloc.sbatch
 
 The final outcome can be summarised by the following plot:
 
-![locus_1_results_summary_plot](https://github.com/ariannalandini/prj_008_multi_coloc_dev/assets/43240476/431ebcd7-6eac-486a-95b3-def28b0437ab)
+![Alt text](locus_1_results_summary_plot.png)
 
 Each dot in the top panel represent the effect size and direction of the most likely causal SNP for that association signals. Multiple dots on the same horizontal line indicate that, for the same trait reported on the y axis, multiple independent association signal have been found in the same genomic regions. Multiple dots aligned on the same vertical line indicate that association signals colocalise (PPH4 > 0.9) accross multiple traits.
 
-In this example, the complex association pattern has been "broken down" into multiple independent signals for height, bmi and appendicular lean mass, while stroke and shbg report only one association signal. One signal from appendicular lean mass colocalises (PPH4 > 0.9) with stroke's association signal (representative SNP rs17035646), while another (independent) signal from appendicular lean mass with shgb (representative SNP rs1211575). In both cases, they have consistent direction of effect.
+In this example, the complex association pattern has been "broken down" into multiple independent signals for bmi and appendicular lean mass, while height, stroke and shbg report only one association signal. One signal from appendicular lean mass colocalises (PPH4 > 0.9) with stroke's association signal (representative SNP rs17035646), while another (independent) signal from appendicular lean mass with shgb (representative SNP rs1211575). In both cases, they have consistent direction of effect.
 
 <br>
 <br>
