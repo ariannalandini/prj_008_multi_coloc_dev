@@ -80,10 +80,9 @@ locus.breaker <- function(
 
 ### locus.lister
 locus.lister <- function(
-  my_path_loci=NULL,
+  loci_list=NULL,
   out="./panlocus_table.tsv"){
 
-  loci_list <- list.files(path=my_path_loci, pattern="*_loci.tsv", full.names=T)
   all_loci <- as.data.frame(rbindlist(lapply(loci_list, function(x) fread(x, data.table=F)), fill=TRUE))
   cat("\nIdentify overlapping loci across traits\n")
   
@@ -103,19 +102,4 @@ locus.lister <- function(
   cat(paste0("\nTotal of ", length(unique(all_loci$pan_locus)), " pan loci identified\n"))
   fwrite(all_loci %>% arrange(pan_locus, trait), out, sep="\t", quote=F, na=NA)
   #  return(all_loci)
-}
-
-
-#### package.loader - Load packages if available, install them first if not
-# Check if the package is already installed
-package.loader <- function(package_name){
-  if(!require(package_name, character.only = TRUE)) {
-# If not installed, install the package
-    install.packages(package_name)
-# Load the package
-    library(package_name, character.only = TRUE)
-  } else {
-# If already installed, just load the package
-    library(package_name, character.only = TRUE)
-  }
 }
