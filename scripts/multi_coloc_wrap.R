@@ -1,23 +1,4 @@
-# Load packages and source functions
-suppressMessages(library(optparse))
-suppressMessages(library(data.table))
-suppressMessages(library(R.utils))
-suppressMessages(library(corrplot))
-suppressMessages(library(coloc))
-suppressMessages(library(bigsnpr))
-suppressMessages(library(ggplot2))
-suppressMessages(library(cowplot))
-suppressMessages(library(stringi))
-suppressMessages(library(patchwork))
-suppressMessages(library(reshape2))
-suppressMessages(library(RColorBrewer))
-suppressMessages(library(igraph))
-suppressMessages(library(purrr))
-suppressMessages(library(tidyr))
-suppressMessages(library(plyr))
-suppressMessages(library(Gviz))
-suppressMessages(library(EnsDb.Hsapiens.v75))
-suppressMessages(library(dplyr))
+# Source functions
 source("prj_008_multi_coloc_dev/scripts/multi_coloc_funs.R")
 
 # Get arguments specified in the sbatch
@@ -50,6 +31,8 @@ option_list <- list(
               help="Genomic build of GWAS summary statistics", metavar="character"),
   make_option("--maf", type="numeric", default=0.0001, 
               help="MAF filter", metavar="character"),
+  make_option("--pph4", type="numeric", default=0.9, 
+              help="Threshold for robust colocalising results (PPH4 > set threshold)", metavar="character"),
   make_option("--bfile", type="character", default=NULL,
               help="Path and prefix name of custom LD bfiles (PLINK format .bed .bim .fam)", metavar="character"),
   make_option("--save_inter_files", type="logical", default=FALSE, 
@@ -59,7 +42,11 @@ option_list <- list(
   make_option("--plink2_bin", type="character", default="/ssu/gassu/software/plink/2.00_20211217/plink2", 
               help="Path to plink2 software", metavar="character"),
   make_option("--gcta_bin", type="character", default="/ssu/gassu/software/GCTA/1.94.0beta/gcta64", 
-              help="Path to GCTA software", metavar="character")
+              help="Path to GCTA software", metavar="character"),
+  make_option("--sum_plot_order", type="character", default=NULL, 
+              help="Comma separated or path and file name of plotting order for traits", metavar="character"),
+  make_option("--sum_plot_col", type="character", default=NULL, 
+              help="Comma separated or path and file name of plotting colour for traits", metavar="character")
 );
 opt_parser = OptionParser(option_list=option_list);
 opt = parse_args(opt_parser);
@@ -112,7 +99,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
   system(paste0(opt$tabix, " -h -D ",mappa," chr",chr,":",start,"-",end," > ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
 # Load local map and format  
   mappa.loc <- fread(paste0(opt$output, "/locus_",locus,"_mappa.loc.tsv"), data.table=F) %>%
-    select("#chromosome", contains(as.character(unique(loci.table.tmp$grch))))
+    dplyr::select("#chromosome", contains(as.character(unique(loci.table.tmp$grch))))
   names(mappa.loc) <- c("CHR","BP", "SNP")
   system(paste0("rm ", opt$output, "/locus_",locus,"_mappa.loc.tsv"))
 # Format - DO WE REALLY NEED MAF?! Can we calculate it on the fly? - A bit tricky! Due to different SNP naming
@@ -121,7 +108,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
         CHR=gsub("chr", "", CHR),
         A1=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\1", SNP),
         A2=gsub("chr\\d+:\\d+:(\\w+):(\\w+)", "\\2", SNP)
-      ) %>% select(SNP,CHR,BP,A1,A2)
+      ) %>% dplyr::select(SNP,CHR,BP,A1,A2)
   mappa.loc$CHR <- as.numeric(mappa.loc$CHR)
 
   cat("\nAll set and ready to start!\n")
@@ -236,7 +223,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
       cat(paste0("No independent signal identified for any of the traits at locus ", locus, " for the p-value (5e-8) threshold specified: genome-wide significant SNPs were probably removed during alignment with map in the munging step. Analysis stops here."))
     } else {
 
-  ################################################ FINEMAPPING BY SINGLE (CONDTIONED) TRAIT!!!
+  ################################################ FINEMAPPING BY SINGLE (CONDITIONED) TRAIT!!!
       cs_threshold=0.99
       
   # Format conditional datasets
@@ -261,12 +248,12 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
         # Format input  
         if(any(!is.na(x$bC))){
           x <- x %>%
-            select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
+            dplyr::select("SNP","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s"))) %>%
+            dplyr::rename("snp"="SNP","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq")
         }else{
           x <- x %>%
-            select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
-            rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
+            dplyr::select("SNP","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s"))) %>%
+            dplyr::rename("snp"="SNP","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq")
         }
         x$varbeta=x$varbeta^2
         x=na.omit(x)
@@ -278,9 +265,9 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
           arrange(desc(SNP.PP)) %>% 
           mutate(cred.set = cumsum(SNP.PP), trait=trait, cojo_snp=cojo_snp)  %>%
           # Add trait and cojo_hit info, to merge with loci table later
-          select(trait,cojo_snp,snp,lABF.,SNP.PP, cred.set) %>%
-          rename("lABF"="lABF.") %>%
-          filter(snp!="null")
+          dplyr::select(trait,cojo_snp,snp,lABF.,SNP.PP, cred.set) %>%
+          dplyr::rename("lABF"="lABF.") %>%
+          dplyr::filter(snp!="null")
         fine.res
       })
       
@@ -334,14 +321,9 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
           }
         }
     
-    # Get the index of columns where PP.H4 >= 0.9
-        index <- which(round(as.numeric(final.colocs.summary$PP.H4.abf),2) >= 0.90)
-    
-    # Keep only traits colocalising (PP.H4 >= 0.9) for both summary and results coloc output
-        final.colocs.H4 <- final.colocs.summary[index,]
-  #      by_snp_PPH4 <- final.colocs.results[index]
-  #      by_snp_PPH3 <- final.colocs.results[setdiff(seq(1,length(final.colocs.results)), index)]
-        
+    # Keep only traits colocalising (PP.H4 >= set threshold) for both summary and results coloc output
+        final.colocs.H4 <- final.colocs.summary %>% dplyr::filter(round(as.numeric(PP.H4.abf),2)> opt$pph4)
+       
      
     ### Define colocalisation groups
         colocalization.table.all=c()
@@ -398,7 +380,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
   #        a=reshape2::dcast(pleio.all[,c("SNP","trait","Z")],SNP~trait,fill = 0)
   ### aggregate function missing, defaulting to ‘length’ - This error occurs when more than one value could be placed in the individual cells of the wide data frame. Mean Z-scores is thus taken for each SNP-trait combo (beta values varies, why?!)     
   
-          a <- pleio.all %>% select(-Z_scaled) %>% spread(trait, Z)
+          a <- pleio.all %>% dplyr::select(-Z_scaled) %>% spread(trait, Z)
           a[is.na(a)] <- 0
           row.names(a)=a$SNP
                   
@@ -415,7 +397,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
   
   ##### Scaled Z-scores
   #        a2=reshape2::dcast(pleio.all[,c("SNP","trait","Z_scaled")],SNP~trait,fill = 0)
-          a2 <- pleio.all %>% select(-Z) %>% spread(trait, Z_scaled)
+          a2 <- pleio.all %>% dplyr::select(-Z) %>% spread(trait, Z_scaled)
           a2[is.na(a2)] <- 0
           row.names(a2)=a2$SNP
   
@@ -439,8 +421,8 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
           
   ### Flag SNPs not passing p-value filtering condition
           final.locus.table.tmp <- as.data.frame(final.locus.table.tmp %>%
-            rename(snp_original=SNP, SNP=snp_map) %>%
-            select(all_of(col.order)) %>%
+            dplyr::rename(snp_original=SNP, SNP=snp_map) %>%
+            dplyr::select(all_of(col.order)) %>%
             mutate(flag=ifelse((p < 5e-8 & pJ < 1e-6) | pJ < 5e-8, "keep", "remove")))
         } 
     
@@ -458,35 +440,33 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
           colocalization.table.H4 <- final.colocs.H4 %>%
             inner_join(
               final.locus.table.tmp %>%
-                select(SNP, trait, sub_locus, flag,snp_original)%>%
-                rename(hit1_original=snp_original),
+                dplyr::select(SNP, trait, sub_locus, flag,snp_original) %>%
+                dplyr::rename(hit1_original=snp_original),
             by=c("t1"="trait", "hit1"="SNP", "g1"="sub_locus")
             , multiple = "all"
           ) %>%
           inner_join(
             final.locus.table.tmp %>%
-              select(SNP, trait, sub_locus, flag, snp_original) %>%
-              rename(hit2_original=snp_original),
+              dplyr::select(SNP, trait, sub_locus, flag, snp_original) %>%
+              dplyr::rename(hit2_original=snp_original),
             by=c("t2"="trait", "hit2"="SNP", "g1"="sub_locus")
             ,multiple = "all"
           ) 
-          
-    # Get the index of rows where at least one "remove" flag is present
-  #        index2 <- which(apply(colocalization.table.H4, 1, function(x) sum(x == "keep"))==2)
     
     # Remove all SNPs flagged and save from coloc summary output     
           colocalization.table.H4 <- colocalization.table.H4 %>%
-            filter(flag.x=="keep" & flag.y=="keep") %>%
-            select(-flag.x, -flag.y)
+            dplyr::filter(flag.x=="keep" & flag.y=="keep") %>%
+            dplyr::select(-flag.x, -flag.y)
           
-          write.table(colocalization.table.H4,
-                      file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"), row.names=F,quote=F,sep="\t") 
+          if(nrow(colocalization.table.H4)>0){
+             write.table(colocalization.table.H4,
+                      file=paste0(opt$output, "/results/locus_", locus, "_colocalization.table.H4.tsv"), row.names=F,quote=F,sep="\t")}
       }
       
     ### Final summary plot    
         if(!is.null(final.colocs.summary)){
           tryCatch({
-            final.plot(locus,final.locus.table.tmp,data_sub,finemap,output=opt$output)}, error = function(e) {
+            final.plot(locus,final.locus.table.tmp,data_sub,finemap,opt)}, error = function(e) {
             cat("final.plot function failed for some reasons and the plot was not produced. Ask Arianna\n")
             print(e)
           })
@@ -497,7 +477,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
         final.locus.table.tmp$start=unique(locus.info$start)
         final.locus.table.tmp$end=unique(locus.info$end)
         final.locus.table.tmp$pan.locus=locus
-        final.locus.table.tmp$sub_locus=1
+        final.locus.table.tmp$sub_locus=seq(1,nrow(final.locus.table.tmp))
         final.locus.table.tmp$freq_geno=NA
         final.locus.table.tmp$bJ=NA
         final.locus.table.tmp$bJ_se=NA
@@ -508,7 +488,7 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
         alleles=mappa.loc[mappa.loc$SNP %in% final.locus.table.tmp$snp_map,c("A1","A2")]
         final.locus.table.tmp <- final.locus.table.tmp %>%
           mutate(othA=ifelse(refA==alleles$A1, alleles$A2, alleles$A1)) %>%
-          rename(snp_original=SNP, SNP=snp_map)
+          dplyr::rename(snp_original=SNP, SNP=snp_map)
         final.locus.table.tmp$trait=names(datasets)[1]
         final.locus.table.tmp=as.data.frame(final.locus.table.tmp)
         final.locus.table.tmp=final.locus.table.tmp[,col.order]
@@ -518,14 +498,14 @@ if(unique(loci.table.tmp$chr)==6 & length(intersect(unique(loci.table.tmp$start)
       if("flag" %in% names(final.locus.table)){
         final.locus.table <- final.locus.table %>%
           mutate(flag=ifelse(flag=="keep", TRUE, FALSE)) %>% 
-          rename(tested_by_coloc=flag) %>%
+          dplyr::rename(tested_by_coloc=flag) %>%
           arrange(sub_locus)
-        }
-      
-      if(exists("final.colocs.summary")){
-        cs <- as.data.frame(rbindlist(cs)) %>% distinct(trait,cojo_snp,cred.set)
-        final.locus.table <- final.locus.table %>% left_join(cs, by=c("trait","SNP"="cojo_snp"))
       }
+      
+#      if(exists("final.colocs.summary")){ ### Output cs always! Even if coloc not performed
+      cs <- as.data.frame(rbindlist(cs)) %>% distinct(trait,cojo_snp,cred.set)
+      final.locus.table <- final.locus.table %>% left_join(cs, by=c("trait","SNP"="cojo_snp"))
+#      }
       
       print(final.locus.table)
       
