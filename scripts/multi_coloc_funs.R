@@ -1,3 +1,26 @@
+# Load packages
+suppressMessages(library(optparse))
+suppressMessages(library(data.table))
+suppressMessages(library(R.utils))
+suppressMessages(library(corrplot))
+suppressMessages(library(coloc))
+suppressMessages(library(bigsnpr))
+suppressMessages(library(ggplot2))
+suppressMessages(library(cowplot))
+suppressMessages(library(stringi))
+suppressMessages(library(patchwork))
+suppressMessages(library(reshape2))
+suppressMessages(library(RColorBrewer))
+suppressMessages(library(igraph))
+suppressMessages(library(purrr))
+suppressMessages(library(tidyr))
+suppressMessages(library(plyr))
+suppressMessages(library(Gviz))
+suppressMessages(library(EnsDb.Hsapiens.v75))
+suppressMessages(library(dplyr))
+
+
+
 ### load_and_check_input ###
 load_and_check_input <- function(opt, locus){
 ## Throw error message - munged GWAS summary statistics file MUST be provided!
@@ -37,10 +60,10 @@ load_and_check_input <- function(opt, locus){
   }
   
 # Define genomic region
-  loci.table.tmp <- loci.table %>% filter(pan_locus==locus)
+  loci.table.tmp <- loci.table %>% dplyr::filter(pan_locus==locus)
 
   ## Check that strictly required info are not NA
-  if(any(is.na(loci.table.tmp %>% select(all_of(minimal_info))))){
+  if(any(is.na(loci.table.tmp %>% dplyr::select(all_of(minimal_info))))){
     stop(c("NA are not allowed in the following columns:\n", minimal_info), call.=FALSE)
   }
   
@@ -84,7 +107,7 @@ load_and_check_input <- function(opt, locus){
   }
 
 ### NB: for larger pan loci, multiple loci from the same trait have been collapsed?! Doesn't make sense to munge and perform cojo more than once on the same combo of trait and locus
-  loci.table.tmp <- loci.table.tmp %>% select(all_of(minimal_info), "pan_locus", "grch", "bfile", any_of(c("sdY","s"))) %>% distinct()
+  loci.table.tmp <- loci.table.tmp %>% dplyr::select(all_of(minimal_info), "pan_locus", "grch", "bfile", any_of(c("sdY","s"))) %>% distinct()
   
 # Check tyoe column  
   ### Add also parallel possibility to already have type as column of the GWAS sum stats (instead of specified in the input table)   
@@ -139,6 +162,13 @@ dataset.munge=function(sumstats.file
     stop("snp.lab has not been defined or the column is missing")
   }
 
+  if(!is.null(se.lab) & se.lab%in%names(dataset)){
+    names(dataset)[names(dataset)==se.lab]="SE"
+  }else{
+    stop("se.lab has not been defined or the column is missing")
+  }
+  
+  
 #### Map/plink files have unnamed SNP as CHROM:GENPOS_A1_A0, while the GWAS summary statistics as CHROM:GENPOS only
 
 ##### TEMPORARY FIX FOR SARA - NEED TO DOUBLE CHECK THIS STEP
@@ -147,6 +177,7 @@ dataset.munge=function(sumstats.file
   
   if(!is.null(chr.lab) & chr.lab%in%names(dataset)){
     names(dataset)[names(dataset)==chr.lab]="CHR"
+    dataset$CHR <- as.numeric(dataset$CHR) ### set as numeric, can't merge columns of different classes
   }else{
     dataset$CHR=map$CHR[match(dataset$SNP,map$SNP)]
   }
@@ -181,6 +212,8 @@ dataset.munge=function(sumstats.file
   
   if(!is.null(pval.lab) & pval.lab%in%names(dataset)){
     names(dataset)[names(dataset)==pval.lab]="P"
+### Remove NA p-values
+    dataset <- dataset %>% dplyr::filter(!is.na(P))
 ### Check if p-value column provided is log10 transformed. If yes, compute original p-value
     if (!all(dataset$P >= 0 & dataset$P <= 1)) {
       dataset <- dataset %>% mutate(P=10^(-P))
@@ -210,7 +243,7 @@ dataset.munge=function(sumstats.file
 #  dataset <- dataset[which(dataset$SNP %in% map$SNP),]
 #  dataset <- dataset[match(map$SNP,dataset$SNP),]
   dataset <- dataset %>%
-    filter(
+    dplyr::filter(
       CHR==unique(mappa.loc$CHR),
       BP >= min(mappa.loc$BP, na.rm=T) & BP <= max(mappa.loc$BP, na.rm=T)
     )
@@ -239,12 +272,12 @@ dataset.munge=function(sumstats.file
 
   if(type=="cc"){
     dataset <- dataset %>%
-      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","s") %>%
-      rename(se=SE, p=P)
+      dplyr::select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","s") %>%
+      dplyr::rename(se=SE, p=P)
   } else if(type=="quant"){
     dataset <- dataset %>%
-      select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","sdY") %>%
-      rename(se=SE, p=P)
+      dplyr::select("snp_map","SNP","CHR","BP","A1","A2","b","varbeta","SE","P","MAF","N","type","sdY") %>%
+      dplyr::rename(se=SE, p=P)
   }
   dataset
 }
@@ -270,25 +303,25 @@ cojo.ht=function(D=datasets[[1]]
   
 # Assign allele frequency from the LD reference  
   D <- D %>%
-    left_join(freqs %>% select(ID,FreqREF,REF), by=c("SNP"="ID")) %>%
+    left_join(freqs %>% dplyr::select(ID,FreqREF,REF), by=c("SNP"="ID")) %>%
     mutate(FREQ=ifelse(REF==A1, FreqREF, (1-FreqREF))) %>%
-    select(-FreqREF,-REF)
+    dplyr::select(-FreqREF,-REF)
 ### Following code was causing a lot of mismatch in allele frequency between GWAS and reference  
 #  D$FREQ=freqs$FreqA1[match(D$SNP,freqs$ID)]
 #  idx=which(D$A1!=freqs$REF)
 #  D$FREQ[idx]=1-D$FREQ[idx]
 #  D$se=sqrt(D$varbeta) # why not keeping se from the munging? se is anyway required to calculate varbeta
-  D <- D %>% select("SNP","A1","A2","FREQ","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
+  D <- D %>% dplyr::select("SNP","A1","A2","FREQ","b","se","p","N","snp_map","type", any_of(c("sdY","s")))
   write.table(D,file=paste0(random.number,"_sum.txt"),row.names=F,quote=F,sep="\t")
 
 # step1 determine independent snps
   system(paste0(gcta.bin," --bfile ", random.number, " --cojo-p ", p.tresh, " --maf ", maf.thresh, " --extract ", random.number, ".snp.list --cojo-file ", random.number, "_sum.txt --cojo-slct --out ", random.number, "_step1"))
   
   if(file.exists(paste0(random.number,"_step1.jma.cojo"))){
-    ind.snp=fread(paste0(random.number,"_step1.jma.cojo")) %>%
-      left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
-
     dataset.list=list()
+    ind.snp=fread(paste0(random.number,"_step1.jma.cojo")) %>%
+      left_join(D %>% dplyr::select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
+
     dataset.list$ind.snps <- data.frame(matrix(ncol = ncol(ind.snp), nrow = 0))
     colnames(dataset.list$ind.snps) <- colnames(ind.snp)
     dataset.list$results=list()
@@ -308,7 +341,7 @@ cojo.ht=function(D=datasets[[1]]
 ############
   # Re-add type and sdY/s info, and map SNPs!
           step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-            left_join(D %>% select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
+            left_join(D %>% dplyr::select(SNP,snp_map,type,any_of(c("sdY", "s"))), by="SNP")
 # Add SNPs to the ind.snps dataframe         
           dataset.list$ind.snps <- rbind(dataset.list$ind.snps, ind.snp[i,])
 # Add conditioned gwas to the results list          
@@ -324,10 +357,10 @@ cojo.ht=function(D=datasets[[1]]
     system(paste0(gcta.bin," --bfile ",random.number," --cojo-p ",p.tresh, " --maf ", maf.thresh, " --extract ",random.number,".snp.list --cojo-file ",random.number,"_sum.txt --cojo-cond ",random.number,"_independent.snp --out ",random.number,"_step2"))
 
     step2.res <- fread(paste0(random.number, "_step2.cma.cojo"), data.table=FALSE) %>%
-      left_join(D %>% select(SNP,snp_map,A1,type,any_of(c("sdY", "s"))), by=c("SNP", "refA"="A1"))
+      left_join(D %>% dplyr::select(SNP,snp_map,A1,type,any_of(c("sdY", "s"))), by=c("SNP", "refA"="A1"))
 
 #### Add back top SNP, removed from the data frame with the conditioning step
-    step2.res <- rbind.fill(step2.res, ind.snp %>% select(-bJ,-bJ_se,-pJ,-LD_r))
+    step2.res <- rbind.fill(step2.res, ind.snp %>% dplyr::select(-bJ,-bJ_se,-pJ,-LD_r))
     step2.res$bC <- NA
     step2.res$bC_se <- NA
     step2.res$pC <- NA
@@ -336,11 +369,11 @@ cojo.ht=function(D=datasets[[1]]
     dataset.list$results[[1]]=step2.res
     names(dataset.list$results)[1]=ind.snp$snp_map[1]
     }
+    # Remove results df possibly empty (in case of collinearity issue)
+    dataset.list$results <- dataset.list$results %>% discard(is.null)
   }
-# Remove results df possibly empty (in case of collinearity issue)
-  dataset.list$results <- dataset.list$results %>% discard(is.null)
   system(paste0("rm *",random.number,"*"))
-  if(exists("dataset.list")){dataset.list}
+  if(exists("dataset.list")){return(dataset.list)}
 }
 
 
@@ -442,24 +475,24 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
         
         if(any(!is.na(D1$bC))){
           D1 <- D1 %>%
-            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
-            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
+            dplyr::select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            dplyr::rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
         } else {
           D1 <- D1 %>%
-            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
-            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
+            dplyr::select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            dplyr::rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D1$varbeta=D1$varbeta^2
         D1=na.omit(D1)
         
         if(any(!is.na(D2$bC))){
           D2 <- D2 %>%
-            select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
-            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
+            dplyr::select("snp_map","Chr","bp","bC","bC_se","n","pC","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            dplyr::rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="bC","varbeta"="bC_se","N"="n","pvalues"="pC","MAF"="freq","snp_original"="SNP")
         }else{
           D2 <- D2 %>%
-            select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
-            rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
+            dplyr::select("snp_map","Chr","bp","b","se","n","p","freq","type",any_of(c("sdY","s")),"SNP") %>%
+            dplyr::rename("snp"="snp_map","chr"="Chr","position"="bp","beta"="b","varbeta"="se","N"="n","pvalues"="p","MAF"="freq","snp_original"="SNP")
         }
         D2$varbeta=D2$varbeta^2
         D2=na.omit(D2)
@@ -480,7 +513,7 @@ colo.cojo.ht=function(conditional.dataset1=conditional.datasets[[pairwise.list[i
 
 ## Save coloc result by SNP
         colo.full_res <- colo.res$results %>% 
-          select(snp,position,lABF.df1,lABF.df2,SNP.PP.H4) %>% 
+          dplyr::select(snp,position,lABF.df1,lABF.df2,SNP.PP.H4) %>% 
           mutate(hit1=i, hit2=j)
         colo.all <- list(summary=colo.sum, results=colo.full_res)
 ## Organise all in a list of lists (each list is composed of summary + results)
@@ -516,7 +549,7 @@ coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp, col.order)
     final.locus.table.tmp$sub_locus[idx]=pri:(pri+length(idx)-1)
   }
   
-  final.locus.table.tmp <- final.locus.table.tmp %>% rename(snp_original=SNP, SNP=snp_map)
+  final.locus.table.tmp <- final.locus.table.tmp %>% dplyr::rename(snp_original=SNP, SNP=snp_map)
   final.locus.table.tmp=as.data.frame(final.locus.table.tmp)[,col.order]
   return(final.locus.table.tmp)
 } 
@@ -527,7 +560,7 @@ coloc.subgrouping <- function(final.colocs.H4, final.locus.table.tmp, col.order)
 coloc.plot <- function(x, outpath=NULL){
   
   if(is.null(x)){
-    cat("\nError: table summarising all colocalizing results (PP.H4 >= 0.9) is missing\n")
+    cat(paste0("\nError: table summarising all colocalizing results (PP.H4 >= ", opt$pph4, " ) is missing\n"))
   } else {
     
     per.plot.data=c()
@@ -750,41 +783,24 @@ pleio.table=function(conditional.datasets=conditional.datasets,loc.table=NA,plot
 }
 
 
-
-#### package.loader - Load packages if available, install them first if not
-# Check if the package is already installed
-package.loader <- function(package_name){
-  if(!require(package_name, character.only = TRUE)) {
-    # If not installed, install the package
-    install.packages(package_name)
-    # Load the package
-    library(package_name, character.only = TRUE)
-  } else {
-    # If already installed, just load the package
-    library(package_name, character.only = TRUE)
-  }
-}
-
-
-
 #### final.plot - Final summary plot function
 final.plot <- function(locus,
                        final.locus.table.tmp,
                        data_sub,
                        finemap,
-                       output=opt$output
+                       opt # for options
 ){
 
 # Integrate finemapping (lABF) and GWAS (beta...and p-value?) info
   full_df <- as.data.frame(rbindlist(lapply(names(data_sub), function(x){
     left_join(finemap[[x]],
-              data_sub[[x]] %>% select(SNP,Chr,bp,any_of(c("b","bC")),any_of(c("p","pC")),trait,cojo_snp),
+              data_sub[[x]] %>% dplyr::select(SNP,Chr,bp,any_of(c("b","bC")),any_of(c("p","pC")),trait,cojo_snp),
               by=c("snp"="SNP","trait","cojo_snp"))
   }), fill=TRUE))
   
 # Add sublocus info to conditional dataset - keep only SNPs actually submitted to coloc
   loci_table <- full_df %>%
-    right_join(final.locus.table.tmp %>% filter(flag=="keep") %>% select(sub_locus, trait, SNP),
+    right_join(final.locus.table.tmp %>% dplyr::filter(flag=="keep") %>% dplyr::select(sub_locus, trait, SNP),
       by=c("trait", "cojo_snp"="SNP"))
 
 # Find representative SNP to plot
@@ -793,7 +809,8 @@ final.plot <- function(locus,
       group_by(snp) %>%
       mutate(joint.pp=sum(lABF)) %>%
       ungroup() %>%
-      filter(joint.pp==max(joint.pp))
+      dplyr::filter(joint.pp==max(joint.pp)) %>%
+      distinct(lABF, .keep_all = T)
   })))
 
 ## Adjustment for plotting
@@ -807,22 +824,27 @@ final.plot <- function(locus,
     mutate(group=paste0(sub_locus, " ", snp)) %>%
     arrange(bp)
 
-  #### To delete - just for script developing sake
-  #  fwrite(final,
-  #         paste0(opt$output, "/results/locus_", locus, "_table_for_final_plot.tsv"),
-  #         sep="\t", quote=F, na=NA)
-  
+  if(opt$save_inter_files==TRUE){
+    fwrite(final, paste0(opt$output, "/temporary/locus_", locus, "_results_summary_table.tsv"), sep="\t", quote=F, na=NA)
+  }
 
 #### PLOT #### 
   
-# Set plot boundiaries  
+# Set plot boundaries  
   bp_max = max(final$bp) + 250000
   bp_min = min(final$bp) - 250000
   chr = unique(final$Chr)
 
+  
 ### Plot 1 - causal SNPs beta
   
-# lock in factor level order
+# If plotting order of traits is specified, apply it. Alphabetical order used otherwise
+  if(!is.null(opt$sum_plot_order)){
+    trait_order <- rev(unlist(strsplit(as.character(opt$sum_plot_order),split=","))) ### original order plotted from bottom to top
+    final$trait <- factor(final$trait, levels = trait_order)
+  }
+  
+# lock in x axis factor level order (SNP position)
   final$group <- factor(final$group, levels = unique(final$group))
 # Set x axis labels  
   x_axis <- gsub("\\d+ (.*)", "\\1", unique(final$group))
@@ -844,7 +866,7 @@ final.plot <- function(locus,
       breaks=unique(final$breaks),
       labels=x_axis) +
     ylab("Magnitude and\ndirection of effect\n") +
-    scale_color_manual(values = c("-"="#10b090", "+"="#dc143c")) +
+    scale_color_manual(values = c("+"="#2f67b1", "-"="#bf2c23")) +
     guides(size = "none") +
     guides(color=guide_legend(title="Direction of effect   ", override.aes=list(size=4)
     )) +
@@ -856,23 +878,28 @@ final.plot <- function(locus,
       legend.position = "bottom",
       legend.direction="horizontal",
       axis.title.x = element_blank(),
-      axis.text.x = element_text(size=9),#, angle=45, hjust=1),
-      axis.text.y = element_text(size=9),
+      axis.text.x = element_text(size=10),
+      axis.text.y = element_text(size=10),
       panel.border = element_rect(color = "black", fill=NA, linewidth=1),
       panel.grid.minor = element_blank()
     )
   
-### If SNP labels are too many, plot them 45 degrees angles
+  
+### If SNP labels are too many, plot them vertically
   if(length(unique(final$group))>10){
-    p1 <- p1 + theme(axis.text.x = element_text(size=9, angle=45, hjust=1))
+    p1 <- p1 + theme(axis.text.x = element_text(size=9, angle=90, hjust=1))
   }
   
+  # If ALSO plotting colour of traits labels is specified, apply it. Black used otherwise
+  if(!is.null(opt$sum_plot_order) & !is.null(opt$sum_plot_col)){
+    color_order <-rev(unlist(strsplit(as.character(opt$sum_plot_col),split=",")))
+    p1 <- p1 + theme(axis.text.y = element_text(colour=color_order))
+  } 
   
 ### Plot 2 - Likely causal SNPs labels and lines connecting the equally spaced betas to actual position on chromosome
   p2 <- ggplot(final %>% distinct(group, .keep_all=T), aes(x = bp)) +
-    geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), color="black") +
-    geom_segment(aes(y=0, yend=0.5, x=bp, xend=breaks), color="black") +
-#    geom_text(aes(y=1.02, x=breaks, label=x_axis), vjust = 0) +
+    geom_segment(aes(y=0.5, yend=1, x=breaks, xend=breaks), colour = "gray", alpha=0.75) +
+    geom_segment(aes(y=0, yend=0.5, x=bp, xend=breaks), colour = "gray", alpha=0.75) +
     scale_x_continuous(
       limits=c(bp_min,bp_max),
       expand=c(0,0)) +
@@ -891,44 +918,45 @@ final.plot <- function(locus,
     )
   
 ### Plot 3 - gene annotation
-  # Retrieve info on the genes
+
+# Retrieve info on the genes
   ref_genes <- genes(EnsDb.Hsapiens.v75)
   ref_genes <- ref_genes[ref_genes@elementMetadata$gene_biotype=='protein_coding',]
   ind <- findOverlaps(GRanges(seqnames=chr,IRanges(start=bp_min,end=bp_max)),ref_genes,type="any")
   a <- ref_genes[ind@to,]
   
 # Plot only if at least one gene is found  
-  if(length(a$gene_id)>0){
+#  if(length(a$gene_id)>0){ #### Needed? Since there's the plot_gene_zero function
   
-    granges2df <- function(x) {
-      df <- as(x, "data.frame")
-      df <- df[,c("seqnames","start","end","strand","group_name",'exon_id')]
-      colnames(df)[1] <- "chromosome"
-      colnames(df)[5] <- "transcript"
-      df
-    }
+  granges2df <- function(x) {
+    df <- as(x, "data.frame")
+    df <- df[,c("seqnames","start","end","strand","group_name",'exon_id')]
+    colnames(df)[1] <- "chromosome"
+    colnames(df)[5] <- "transcript"
+    df
+  }
     
-    txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
+  txdf <- ensembldb::select(EnsDb.Hsapiens.v75,
                               keys=keys(EnsDb.Hsapiens.v75, "GENEID"),
                               columns=c("GENEID","TXID", 'SYMBOL'),
                               keytype="GENEID")
-    ebt <- exonsBy(EnsDb.Hsapiens.v75, by="tx")
+  ebt <- exonsBy(EnsDb.Hsapiens.v75, by="tx")
     
-    ## Arrange info about all transcripts
-    d <- list()
+## Arrange info about all transcripts
+  d <- list()
     
-    for(i in 1:length(a@elementMetadata$gene_id)){
-      idx <- txdf$GENEID ==  a@elementMetadata$gene_id[i]
-      txs <- txdf$TXID[idx]
-      #all the xons for these transcripts
-      ebt2 <- ebt[txs]
-      df <- granges2df(ebt2)
-      df$gene <- a@elementMetadata$gene_id[i]
-      df$symbol <-  txdf[match(df$gene, txdf$GENEID), ]$SYMBOL 
-      d[[i]] <- df
-    }
+  for(i in 1:length(a@elementMetadata$gene_id)){
+    idx <- txdf$GENEID ==  a@elementMetadata$gene_id[i]
+    txs <- txdf$TXID[idx]
+    # all the xons for these transcripts
+    ebt2 <- ebt[txs]
+    df <- granges2df(ebt2)
+    df$gene <- a@elementMetadata$gene_id[i]
+    df$symbol <-  txdf[match(df$gene, txdf$GENEID), ]$SYMBOL 
+    d[[i]] <- df
+  }
     
-    d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
+  d <- do.call(rbind, d) %>% mutate(y=as.numeric(ifelse(strand=="+", 1, -1)))
 
 ####### In case of the same gene having transcripts on both strands, take the strand with most transcript
       d <- d %>% semi_join(
@@ -939,47 +967,98 @@ final.plot <- function(locus,
     gene.end <- by(d$end,d$symbol,FUN = max)
     gene.strand <- by(d$y,d$symbol,FUN = unique)
     
-    g.table=as.data.frame(cbind(gene.starts,gene.end,gene.strand))
-    g.table=g.table[order(g.table$gene.starts),]
-  #  g.table$gene.starts <- round(g.table$gene.starts/1e+6,2)
-  #  g.table$gene.end <- round(g.table$gene.end/1e+6,2)
-  #  g.table$gene.strand <- ifelse(g.table$gene.strand=="1", "+", "-")
+    gene.region <- data.frame(chr=chr, start=gene.starts, end=gene.end, strand=gene.strand)
+    gene.region <- gene.region %>% mutate(
+      gene=rownames(gene.region),
+      start=ifelse(start < bp_min, bp_min, start),
+      end=ifelse(end > bp_max, bp_max, end)
+    ) %>% arrange(start)
     
-    g.table <- g.table %>%
-      mutate(gene.starts=round(gene.starts/1e+6,2), gene.end=round(gene.end/1e+6,2)) %>%
-      mutate(gene.starts=ifelse(gene.starts<round(bp_min/1e+6,2),
-        round(bp_min/1e+6,2),gene.starts)) %>%
-      mutate(gene.end=ifelse(gene.end>round(bp_max/1e+6,2),
-                                round(bp_max/1e+6,2),gene.end)) 
+    ngenes <- nrow(gene.region)
     
-    g.table$gene.strand <- as.character(g.table$gene.strand)
-    lab.table=rowMeans(g.table[,1:2])
-    
-    if(length(names(lab.table))>1){
-    names(lab.table)[c(TRUE, FALSE)] <- paste0("\n\n\n", names(lab.table)[c(TRUE, FALSE)])
-    names(lab.table)[c(FALSE,TRUE)] <- paste0("\n\n\n\n\n", names(lab.table)[c(FALSE,TRUE)])
-    } else {
-      names(lab.table) <- paste0("\n\n\n", names(lab.table))
+# If no genes are found in the region
+    if(ngenes==0){
+      genes.df.pos <- data.frame(pos=c(bp_min,bp_max), y=c(10,5), stringsAsFactors=F) 
+      plot.genes <- ggplot(data=genes.df.pos, aes(x=pos, y=y)) +
+        xlab(paste0("\nPosition on chromosome ", chr, " (Mb)")) +
+        ylab(" ") +
+        scale_y_continuous(limits=c(-5,17), breaks=c(8,16), labels=c("      ", "      ")) +
+        theme_bw() +
+        theme(
+          axis.title.x = element_markdown(),
+          axis.title.y=element_text(vjust=2),
+          axis.ticks.y = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank()
+        ) +
+        scale_x_continuous(
+          limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
+          breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
+          expand=c(0,0)
+        )
     }
     
-### Gene position - doesn't make a lot of sense with the two strands
-    p3 <- ggplot(g.table) +
-      geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
-      geom_rect(aes(xmin=gene.starts, xmax=gene.end, ymin=0.499, ymax=0.501, fill=gene.strand), color="black") +
-      geom_text(aes(y=0.5, x=lab.table, label=names(lab.table)),size=3.5) +
-      xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
+# If at least one gene is found in the region
+    if(ngenes>0 & ngenes<=5){
+      funs_n_genes=2
+      custom_scale_y <- scale_y_continuous(limits=c(-5,17), breaks=c(8,16), labels=c("      ", "      "))
+    }
+    if(ngenes>5 & ngenes<=10){
+      funs_n_genes=5
+      custom_scale_y <- scale_y_continuous(limits=c(-1,41), breaks=c(8,16), labels=c("      ", "      "))
+    }
+    if(ngenes>10 & ngenes<=25){
+      funs_n_genes=10
+      custom_scale_y <- scale_y_continuous(limits=c(-1,81), breaks=c(10,20), labels=c("      ", "      "))
+    }
+    if(ngenes>25){
+      funs_n_genes=15
+      custom_scale_y <- scale_y_continuous(limits=c(-1,121), breaks=c(10,20), labels=c("      ", "      "))
+    }
+    
+    ### Stuff in common that doesn't need to be reapeted each time
+    small.gene <- (as.numeric(gene.region$end) - as.numeric(gene.region$start)) < (bp_max-bp_min)/190
+    gene.region$mid.point <- as.numeric(gene.region$start)+(as.numeric(gene.region$end) - as.numeric(gene.region$start))/2
+    gene.region$start[small.gene] <- gene.region$mid.point[small.gene] - (bp_max-bp_min)/380
+    gene.region$end[small.gene] <- gene.region$mid.point[small.gene] + (bp_max-bp_min)/380
+    genes.start.stop <- as.matrix(gene.region[, c("start", "end")])
+    genes.df.pos <- data.frame(
+      name=paste0("gene",rep(1:nrow(genes.start.stop), each=2)),
+      strand=rep(as.character(gene.region$strand), each = 2),
+      pos=as.vector(t(genes.start.stop)),
+      y=(funs_n_genes*8 - 8*rep(rep(1:funs_n_genes, each=2), ceiling(nrow(genes.start.stop)/funs_n_genes))[1:(2*nrow(genes.start.stop))]), stringsAsFactors=F)
+    
+    plot.pos <- ggplot(data=genes.df.pos, mapping=aes(x=pos, y=y)) +
+      xlab(paste0("\nPosition on chromosome ", chr, " (Mb)")) +
+      ylab(" ") +
+      custom_scale_y +
+      theme_bw() +
+      theme(
+        axis.title = element_text(size=10),
+        axis.title.y=element_text(vjust=2),
+        axis.ticks.y = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        axis.line.x = element_line(color="black", linewidth=0.5),
+        axis.line.y = element_blank()
+      ) +
       scale_x_continuous(
         limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
         breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
-        expand=c(0.01,0.01)
-      ) +
-      scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
-      scale_fill_manual(
-        values = c("-1"="#ff8000", "1"="#007fff"),
-        labels = c("-","+")
-        ) +
-      theme_bw() +
-      guides(fill=guide_legend(title="DNA strand   ")) +
+        expand=c(0,0)
+      )
+    
+    genes.df.mid.point <- data.frame(name=gene.region$gene, x=as.numeric(gene.region$mid.point), y=(funs_n_genes*8 - 8*rep(rep(1:funs_n_genes, each=1), ceiling(nrow(gene.region)/funs_n_genes))[1:nrow(gene.region)] + 3.5), stringsAsFactors=F)
+    
+    p3 <- plot.pos + 
+      geom_line(data=genes.df.pos, mapping=aes(x=round(pos/1e+6,2), y=y, group=name, colour=strand), linewidth=0.8) +
+      geom_vline(xintercept = unique(final$bp/1e+6), colour = "gray", alpha=0.75) +
+      scale_color_manual(
+        values=c("-1"="#ff8000", "1"="#007fff"),
+        labels = c("-","+")) +
+      geom_text(data=genes.df.mid.point, mapping=aes(x=round(x/1e+6,2), y=y, label=name), color="black", size=3, fontface=3) +
+      guides(color=guide_legend(title="DNA strand   ")) +
       theme(
         legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
         legend.text = element_text(size = 12, vjust=0.5),
@@ -987,68 +1066,20 @@ final.plot <- function(locus,
         legend.position = "bottom",
         legend.direction="horizontal",
         legend.key.width = unit(0.5, "cm"),
-        legend.key.height = unit(0.5, "cm"),
-        axis.title.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.border = element_blank(),
-        axis.line.x = element_line(color="black", linewidth=0.5),
-        axis.line.y = element_blank()
+        legend.key.height = unit(0.5, "cm")
       )
-  
-### Align all plots and legends
-  p1_legend <- get_legend(p1)
-  p3_legend <- get_legend(p3)
-  
-  arrange_p <- plot_grid(
-    p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 1, 0, 0.2), "cm")),
-    p2 + theme(plot.margin = unit(c(0.2, 1, 0, 2), "cm")),
-    p3 + theme(legend.position = "none", plot.margin = unit(c(0, 1, 0.5, 0.2), "cm")),
-    plot_grid(p1_legend,p3_legend, ncol=2),
-    align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
-
-# If no genes has been found in the region  
-  } else {
-    g.table <- data.frame(chr=chr, position=c(bp_min,bp_max))
-
-    p3 <- ggplot(g.table, aes(position,1)) +
-      geom_blank() +
-      geom_hline(yintercept=0.5, color="black", linewidth=1.5) +
-      xlab(paste0("\nGenomic position on chromosome ", chr, " (Mb)")) +
-      scale_x_continuous(
-        limits=c(round(bp_min/1e+6,2), round(bp_max/1e+6,2)),
-        breaks=round(seq(bp_min, bp_max, by=100000)/1e+6,2),
-        expand=c(0.01,0.01)
-      ) +
-      scale_y_continuous(limits=c(0.495,0.501), expand = c(0,0)) +
-      theme_bw() +
-      theme(
-        legend.background=element_rect(linewidth=0.5, linetype="solid", colour="black"),
-        legend.text = element_text(size = 12, vjust=0.5),
-        legend.title = element_text(size = 10, vjust=0.5),
-        axis.title.y = element_blank(),
-        axis.ticks.y = element_blank(),
-        axis.text.y = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        panel.border = element_blank(),
-        axis.line.x = element_line(color="black", linewidth=0.5),
-        axis.line.y = element_blank()
-      )    
-
+    
 ### Align all plots and legends
     p1_legend <- get_legend(p1)
-
+    p3_legend <- get_legend(p3)
+    
     arrange_p <- plot_grid(
       p1 + theme(legend.position = "none", plot.margin = unit(c(0.2, 1, 0, 0.2), "cm")),
       p2 + theme(plot.margin = unit(c(0.2, 1, 0, 2), "cm")),
       p3 + theme(legend.position = "none", plot.margin = unit(c(0, 1, 0.5, 0.2), "cm")),
-      plot_grid(p1_legend, ncol=1),
-      align="v", ncol=1, rel_heights=c(1,0.5,0.4,0.1))
-  }
-  
-  ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
+      plot_grid(p1_legend,p3_legend, ncol=2),
+      align="v", ncol=1, rel_heights=c(0.8,0.2,0.8,0.1))
+    
+    ggsave(paste0(opt$output, "/plots/locus_", locus, "_results_summary_plot.png"),
          arrange_p, width=45, height=22, units="cm", bg="white")
 } 
