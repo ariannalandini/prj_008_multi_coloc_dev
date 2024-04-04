@@ -26,6 +26,7 @@ Rscript --vanilla prj_008_multi_coloc_dev/scripts/multi_coloc_wrap.R \
 --se "SE" \
 --pvalue "LOG10P" \
 --maf 0.0001 \
+--pph4 0.9 \
 --save_inter_files "TRUE" \
 --tabix_bin "/ssu/gassu/software/htslib-tools/1.14/tabix" \
 --plink2_bin "/ssu/gassu/software/plink/2.00_20211217/plink2" \
